@@ -54,6 +54,9 @@ public:
         while (iss >> field) {
             fields.push_back(field);
         }
+
+        string pieces = fields[0];
+        
     }
 
     void make_move(const Move& move);

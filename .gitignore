@@ -25,9 +25,7 @@ artifacts/
 *.sln.iml
 
 # .NET Core
-.vscode/*.dotnet/
-.vscode/tasks.json
-.vscode/launch.json
+.vscode/
 
 # =============== C++ ===============
 *.o
@@ -57,3 +55,6 @@ cmake-build-*/
 # =============== OS Files ===============
 .DS_Store
 Thumbs.db
+
+# =============== Environment ===============
+.env

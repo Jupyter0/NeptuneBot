@@ -1,19 +1,16 @@
-﻿using System;
-using System.IO;
-using System.Net.Http;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Diagnostics;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 
 class Program
 {
-    static readonly string token = "lip_xKibWq61cz9cwlt321Ue";
+    static readonly string token = Environment.GetEnvironmentVariable("LICHESS_TOKEN")
+        ?? throw new InvalidOperationException("LICHESS_TOKEN not set");
     static readonly string botUsername = "Neptune-Bot";
     static readonly HttpClient client = new HttpClient();
 
     static async Task Main()
     {
+        DotNetEnv.Env.Load();
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
