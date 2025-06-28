@@ -1,0 +1,59 @@
+# =============== C# / .NET ===============
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# dotnet artifacts
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Build results
+*.dll
+*.exe
+*.app
+*.pdb
+
+# Publish outputs
+*.publish/
+
+# Rider / JetBrains files (if applicable)
+.idea/
+*.sln.iml
+
+# .NET Core
+.vscode/*.dotnet/
+.vscode/tasks.json
+.vscode/launch.json
+
+# =============== C++ ===============
+*.o
+*.obj
+*.so
+*.a
+*.out
+*.exe
+*.log
+*.gch
+*.pch
+*.dSYM/
+*.stackdump
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# CLion / JetBrains
+cmake-build-*/
+
+# =============== VS Code ===============
+.vscode/
+
+# =============== OS Files ===============
+.DS_Store
+Thumbs.db

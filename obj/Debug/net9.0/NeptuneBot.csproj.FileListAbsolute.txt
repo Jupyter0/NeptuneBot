@@ -1,0 +1,14 @@
+/home/jupyter/NeptuneBot/bin/Debug/net9.0/NeptuneBot
+/home/jupyter/NeptuneBot/bin/Debug/net9.0/NeptuneBot.deps.json
+/home/jupyter/NeptuneBot/bin/Debug/net9.0/NeptuneBot.runtimeconfig.json
+/home/jupyter/NeptuneBot/bin/Debug/net9.0/NeptuneBot.dll
+/home/jupyter/NeptuneBot/bin/Debug/net9.0/NeptuneBot.pdb
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.GeneratedMSBuildEditorConfig.editorconfig
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.AssemblyInfoInputs.cache
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.AssemblyInfo.cs
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.csproj.CoreCompileInputs.cache
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.dll
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/refint/NeptuneBot.dll
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.pdb
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.genruntimeconfig.cache
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/ref/NeptuneBot.dll

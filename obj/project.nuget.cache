@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "GpXnRdc6oPQ=",
+  "success": true,
+  "projectFilePath": "/home/jupyter/NeptuneBot/NeptuneBot.csproj",
+  "expectedPackageFiles": [
+    "/home/jupyter/.nuget/packages/microsoft.aspnetcore.app.ref/9.0.4/microsoft.aspnetcore.app.ref.9.0.4.nupkg.sha512"
+  ],
+  "logs": []
+}
