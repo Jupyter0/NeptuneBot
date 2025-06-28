@@ -12,3 +12,11 @@
 /home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.pdb
 /home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.genruntimeconfig.cache
 /home/jupyter/NeptuneBot/obj/Debug/net9.0/ref/NeptuneBot.dll
+/home/jupyter/NeptuneBot/bin/Debug/net9.0/DotNetEnv.dll
+/home/jupyter/NeptuneBot/bin/Debug/net9.0/Microsoft.Extensions.Configuration.dll
+/home/jupyter/NeptuneBot/bin/Debug/net9.0/Microsoft.Extensions.Configuration.Abstractions.dll
+/home/jupyter/NeptuneBot/bin/Debug/net9.0/Microsoft.Extensions.Primitives.dll
+/home/jupyter/NeptuneBot/bin/Debug/net9.0/Sprache.dll
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.csproj.AssemblyReference.cache
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.sourcelink.json
+/home/jupyter/NeptuneBot/obj/Debug/net9.0/NeptuneBot.csproj.Up2Date
