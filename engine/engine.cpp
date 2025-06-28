@@ -145,6 +145,12 @@ public:
     uint64_t blackPieces;
     uint64_t allPieces;
 
+    uint8_t whiteKingPos;
+    uint8_t blackKingPos;
+
+    uint64_t whiteAttacks;
+    uint64_t blackAttacks;
+
     bool whiteToMove;
 
     uint8_t castlingRights; //0b0000KQkq K: WKS, Q: WQS, k: BKS, q: BQS
@@ -204,6 +210,77 @@ public:
         UpdateOccupancy();
     }
 
+    void UpdateAttacks() {
+        whiteAttacks = 0ULL;
+        blackAttacks = 0ULL;
+
+        AddNonSlidingAttacks(whiteKnights, KNIGHT, WHITE, whiteAttacks);
+        AddNonSlidingAttacks(whiteKing, KING, WHITE, whiteAttacks);
+        AddNonSlidingAttacks(whitePawns, PAWN, WHITE, whiteAttacks);
+        AddNonSlidingAttacks(blackKnights, KNIGHT, BLACK, blackAttacks);
+        AddNonSlidingAttacks(blackKing, KING, BLACK, blackAttacks);
+        AddNonSlidingAttacks(blackPawns, PAWN, BLACK, blackAttacks);
+    }
+    void AddSlidingAttacks(uint64_t pieces, Piece pieceType, Color color, uint64_t attacks) {
+        if (pieceType == KNIGHT || pieceType == KING || pieceType == PAWN) return;
+        if (pieceType == QUEEN) {
+            AddSlidingAttacks(pieces, ROOK, color, attacks);
+            AddSlidingAttacks(pieces, BISHOP, color, attacks);
+            return;
+        }
+        uint64_t p = pieces;
+        while(p) {
+            int sq = __builtin_ctzll(p);
+            p &= p - 1;
+
+            switch (pieceType) {
+                case BISHOP: {
+                    attacks |= CalculateSlidingAttacks(sq, bishopDirs, allPieces);
+                    break;
+                }
+                case ROOK: {
+                    attacks |= CalculateSlidingAttacks(sq, rookDirs, allPieces);
+                    break;
+                }
+            }
+        }
+    }
+
+    uint64_t CalculateSlidingAttacks(uint64_t sq, const int directions[][2], uint64_t all) {
+        int rank = sq >> 3;
+        int file = sq & 7;
+        uint64_t attacks = 0;
+
+        for (int d = 0; d < 4; d++) {
+            int r = rank + directions[d][0];
+            int f = file + directions[d][1];
+            while (r >= 0 && r < 8 && f >= 0 && f < 8) {
+                int target = r * 8 + f;
+                uint64_t targetBB = 1ULL << target;
+                attacks |= targetBB;
+                if (all & targetBB) break;
+                r += directions[d][0];
+                f += directions[d][1];
+            }           
+        }
+        return attacks;
+    }
+
+    void AddNonSlidingAttacks(uint64_t pieces, Piece pieceType, Color color, uint64_t attacks) {
+        if (pieceType == BISHOP || pieceType == ROOK || pieceType == QUEEN) return;
+        uint64_t p = pieces;
+        while(p) {
+            int sq = __builtin_ctzll(p);
+            p &= p - 1;
+
+            switch (pieceType) {
+                case KNIGHT: attacks |= knightAttacks[sq]; break;
+                case KING: attacks |= kingAttacks[sq]; break;
+                case PAWN: attacks |= pawnAttacks[color][sq]; break;
+            }
+        }
+    }
+
     void ParsePieces(string piecesField) {
         vector<string> ranks;
         size_t start = 0;
@@ -244,7 +321,9 @@ public:
         }
     }
 
-    void make_move(const Move& move) {}
+    void make_move(const Move& move) {
+        
+    }
     bool is_king_in_check(bool white) { return false; }
 
 
@@ -264,6 +343,23 @@ public:
     }
 
 };
+
+vector<Move> GenerateLegalMoves(Board& board) {
+    vector<Move> pseudoMoves = GeneratePseudoLegalMoves(board, board.whiteToMove);
+    vector<Move> legalMoves;
+    legalMoves.reserve(pseudoMoves.size());
+
+    for (const Move& move : pseudoMoves) {
+        Board temp = board;
+        temp.make_move(move);
+        if (!temp.is_king_in_check(!temp.whiteToMove)) { // check if own king is not in check
+            legalMoves.push_back(move);
+        }
+    }
+
+    return legalMoves;
+}
+
 
 vector<Move> GeneratePseudoLegalMoves(Board& board, bool isWhiteToMove) {
     vector<Move> moves;
@@ -333,19 +429,14 @@ void GenerateSlidingMoves(uint64_t pieces, const int directions[][2], int dirCou
     }
 }
 
-// Pass the attack table pointer to choose knightAttacks or kingAttacks based on piece type
 void GenerateNonSlidingMoves(uint64_t pieces, const uint64_t attackTable[64], uint64_t own, vector<Move>& moves) {
     while (pieces) {
         int sq = __builtin_ctzll(pieces);
         pieces &= pieces - 1;
 
-        // Get all possible attack squares for the piece on sq
         uint64_t attacks = attackTable[sq];
-
-        // Remove squares occupied by own pieces
         attacks &= ~own;
 
-        // Generate moves for all target squares in attacks bitboard
         while (attacks) {
             int target = __builtin_ctzll(attacks);
             attacks &= attacks - 1;
@@ -366,10 +457,8 @@ void GeneratePawnMoves(uint64_t pawns, uint64_t enemy, uint64_t all, vector<Move
 
         int rank = sq >> 3;
 
-        // One step forward
         int oneStep = sq + forward;
         if (oneStep >= 0 && oneStep < 64 && !(all & (1ULL << oneStep))) {
-            // Promotion or normal move
             if (rank == promotionRank) {
                 moves.push_back(Move(sq, oneStep, 'q'));
                 moves.push_back(Move(sq, oneStep, 'r'));
@@ -378,7 +467,6 @@ void GeneratePawnMoves(uint64_t pawns, uint64_t enemy, uint64_t all, vector<Move
             } else {
                 moves.push_back(Move(sq, oneStep));
 
-                // Two steps forward
                 if (rank == startRank) {
                     int twoStep = sq + 2 * forward;
                     if (!(all & (1ULL << twoStep))) {
@@ -388,9 +476,7 @@ void GeneratePawnMoves(uint64_t pawns, uint64_t enemy, uint64_t all, vector<Move
             }
         }
 
-        // Captures
         uint64_t attacks = pawnAttacks[color][sq];
-        // Remove en passant square from attacks for now (we'll handle it separately)
         uint64_t normalCaptures = attacks & enemy;
 
         while (normalCaptures) {
@@ -407,12 +493,9 @@ void GeneratePawnMoves(uint64_t pawns, uint64_t enemy, uint64_t all, vector<Move
             }
         }
 
-        // En passant capture
         if (epSquare < 64) {
             uint64_t epBB = 1ULL << epSquare;
-            // Check if the pawn attacks epSquare
             if ((attacks & epBB) != 0) {
-                // The pawn can capture en passant, generate that move
                 moves.push_back(Move(sq, epSquare, 0, true));
             }
         }
