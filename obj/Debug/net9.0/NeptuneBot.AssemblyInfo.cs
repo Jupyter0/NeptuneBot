@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NeptuneBot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0c1d1aa10d2d35b325273c4dab00bec029face9a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a80fad691f2fe15697af99760ece9bdcd3e24611")]
 [assembly: System.Reflection.AssemblyProductAttribute("NeptuneBot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NeptuneBot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
