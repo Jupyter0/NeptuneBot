@@ -4,14 +4,17 @@ using System.Text;
 
 class Program
 {
-    static readonly string token = Environment.GetEnvironmentVariable("LICHESS_TOKEN")
-        ?? throw new InvalidOperationException("LICHESS_TOKEN not set");
     static readonly string botUsername = "Neptune-Bot";
     static readonly HttpClient client = new HttpClient();
 
-    static async Task Main()
+    static async Task Main(string[] args)
     {
-        DotNetEnv.Env.Load();
+        string envFile = args.Length > 0 ? args[0] : ".env";
+        DotNetEnv.Env.Load(envFile);
+
+        string token = Environment.GetEnvironmentVariable("LICHESS_TOKEN")
+        ?? throw new InvalidOperationException("LICHESS_TOKEN not set");
+
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
@@ -121,7 +124,7 @@ class Program
                 moves.Count != lastMoveCount)
             {
                 var move = await GetBestMoveFromEngine(fen, moves);
-                await SendMove(gameId, move);
+                await SendMove(gameId, move.Trim());
                 lastMoveCount = moves.Count;
             }
         }
@@ -139,7 +142,6 @@ class Program
 
     static void HandleGameFull(JsonDocument doc, ref string? color, ref string? fen, ref List<string> moves)
     {
-        Console.WriteLine(doc.RootElement);
         if (doc.RootElement.TryGetProperty("white", out var white) &&
             white.TryGetProperty("id", out var whiteIdElement))
         {
@@ -201,7 +203,6 @@ class Program
             pos.ApplyMove(move);
         }
         string uFen = pos.GetFEN();
-        Console.WriteLine($"Sending Fen: {uFen}");
         await engine.StandardInput.WriteLineAsync($"position fen {uFen} moves {moveStr}");
         await engine.StandardInput.WriteLineAsync("go wtime 30000 btime 30000");
         await engine.StandardInput.FlushAsync();
@@ -229,7 +230,7 @@ class Program
         if (res.IsSuccessStatusCode)
             Console.WriteLine($"[MOVE] {move} sent for {gameId}");
         else
-            Console.WriteLine($"[ERROR] Failed to send move: {await res.Content.ReadAsStringAsync()}");
+            Console.WriteLine($"[ERROR] Failed to send move: {res.ReasonPhrase}");
     }
 }
 
@@ -282,7 +283,6 @@ public class ChessPosition
 
     public void ApplyMove(string move)
     {
-        Console.WriteLine(move);
         // move example: e2e4 or e7e8q
         int fromFile = FileFromChar(move[0]);
         int fromRank = 8 - (move[1] - '0');
