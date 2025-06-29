@@ -6,6 +6,8 @@
 #include <sstream>
 #include <cctype>
 #include <iterator>
+#include <random>
+#include <chrono>
 
 using namespace std;
 
@@ -115,9 +117,20 @@ constexpr uint64_t rank1 = 0x00000000000000FFULL;
 constexpr uint64_t rank2 = 0x000000000000FF00ULL;
 constexpr uint64_t rank3 = 0x0000000000FF0000ULL;
 constexpr uint64_t rank4 = 0x00000000FF000000ULL;
+constexpr uint64_t rank5 = 0x000000FF00000000ULL;
 constexpr uint64_t rank6 = 0x0000FF0000000000ULL;
 constexpr uint64_t rank7 = 0x00FF000000000000ULL;
 constexpr uint64_t rank8 = 0xFF00000000000000ULL;
+
+string indexToSquare(int index) {
+    int file = index & 7;  // 0 to 7
+    int rank = index >> 3;  // 0 to 7
+
+    char fileChar = 'a' + file;       // 'a' to 'h'
+    char rankChar = '1' + rank;       // '1' to '8'
+
+    return string() + fileChar + rankChar;
+}
 
 enum Piece {
     EMPTY, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING
@@ -220,8 +233,15 @@ public:
         AddNonSlidingAttacks(blackKnights, KNIGHT, BLACK, blackAttacks);
         AddNonSlidingAttacks(blackKing, KING, BLACK, blackAttacks);
         AddNonSlidingAttacks(blackPawns, PAWN, BLACK, blackAttacks);
+
+        AddSlidingAttacks(whiteBishops, BISHOP, WHITE, whiteAttacks);
+        AddSlidingAttacks(whiteRooks, ROOK, WHITE, whiteAttacks);
+        AddSlidingAttacks(whiteQueens, QUEEN, WHITE, whiteAttacks);
+        AddSlidingAttacks(blackBishops, BISHOP, BLACK, blackAttacks);
+        AddSlidingAttacks(blackRooks, ROOK, BLACK, blackAttacks);
+        AddSlidingAttacks(blackQueens, QUEEN, BLACK, blackAttacks);
     }
-    void AddSlidingAttacks(uint64_t pieces, Piece pieceType, Color color, uint64_t attacks) {
+    void AddSlidingAttacks(uint64_t pieces, Piece pieceType, Color color, uint64_t& attacks) {
         if (pieceType == KNIGHT || pieceType == KING || pieceType == PAWN) return;
         if (pieceType == QUEEN) {
             AddSlidingAttacks(pieces, ROOK, color, attacks);
@@ -266,7 +286,7 @@ public:
         return attacks;
     }
 
-    void AddNonSlidingAttacks(uint64_t pieces, Piece pieceType, Color color, uint64_t attacks) {
+    void AddNonSlidingAttacks(uint64_t pieces, Piece pieceType, Color color, uint64_t& attacks) {
         if (pieceType == BISHOP || pieceType == ROOK || pieceType == QUEEN) return;
         uint64_t p = pieces;
         while(p) {
@@ -321,16 +341,162 @@ public:
         }
     }
 
-    void make_move(const Move& move) {
-        
+    void make_move(Move move) {
+        int from = move.from;
+        int to = move.to;
+        bool isWhite = whiteToMove;
+        uint64_t fromBB = 1ULL << from;
+        uint64_t toBB = 1ULL << to;
+
+        // Remove en passant target
+        enPassantSquare = 0;
+
+        // Handle piece movement and captures
+        auto move_piece = [&](uint64_t& bb, uint64_t from, uint64_t to) {
+            bb &= ~from;
+            bb |= to;
+        };
+
+        // Find and move the correct piece
+        uint64_t movedBB = fromBB;
+        if (isWhite) {
+            if (whitePawns & fromBB) {
+                move_piece(whitePawns, fromBB, toBB);
+
+                // En passant capture
+                if (move.isEnPassant) {
+                    blackPawns &= ~(1ULL << (to - 8));
+                }
+
+                // Double pawn push: set en passant target
+                if ((fromBB & rank2) && (toBB & rank4)) {
+                    enPassantSquare = (1 << 6) | (from + 8); // flag + square
+                }
+
+                // Promotion
+                if (move.promotion) {
+                    whitePawns &= ~toBB;
+                    switch (move.promotion) {
+                        case 'q': whiteQueens |= toBB; break;
+                        case 'r': whiteRooks |= toBB; break;
+                        case 'b': whiteBishops |= toBB; break;
+                        case 'n': whiteKnights |= toBB; break;
+                    }
+                }
+
+            } else if (whiteKnights & fromBB) move_piece(whiteKnights, fromBB, toBB);
+            else if (whiteBishops & fromBB) move_piece(whiteBishops, fromBB, toBB);
+            else if (whiteRooks & fromBB) {
+                move_piece(whiteRooks, fromBB, toBB);
+                // Remove castling rights if rook moves
+                if (from == h1) castlingRights &= ~(1 << 3);
+                else if (from == a1) castlingRights &= ~(1 << 2);
+            }
+            else if (whiteQueens & fromBB) move_piece(whiteQueens, fromBB, toBB);
+            else if (whiteKing & fromBB) {
+                move_piece(whiteKing, fromBB, toBB);
+                whiteKingPos = to;
+                castlingRights &= ~(1 << 3 | 1 << 2); // Lose both rights
+
+                // Castling
+                if (from == e1 && to == g1) { // King-side
+                    move_piece(whiteRooks, 1ULL << h1, 1ULL << f1);
+                } else if (from == e1 && to == c1) { // Queen-side
+                    move_piece(whiteRooks, 1ULL << a1, 1ULL << d1);
+                }
+            }
+
+            // Remove captured black piece
+            blackPawns   &= ~toBB;
+            blackKnights &= ~toBB;
+            blackBishops &= ~toBB;
+            blackRooks   &= ~toBB;
+            blackQueens  &= ~toBB;
+            blackKing    &= ~toBB;
+
+        } else { // Black move
+            if (blackPawns & fromBB) {
+                move_piece(blackPawns, fromBB, toBB);
+
+                if (move.isEnPassant) {
+                    whitePawns &= ~(1ULL << (to + 8));
+                }
+
+                if ((fromBB & rank7) && (toBB & rank5)) {
+                    enPassantSquare = (1 << 6) | (from - 8);
+                }
+
+                if (move.promotion) {
+                    blackPawns &= ~toBB;
+                    switch (move.promotion) {
+                        case 'q': blackQueens |= toBB; break;
+                        case 'r': blackRooks |= toBB; break;
+                        case 'b': blackBishops |= toBB; break;
+                        case 'n': blackKnights |= toBB; break;
+                    }
+                }
+
+            } else if (blackKnights & fromBB) move_piece(blackKnights, fromBB, toBB);
+            else if (blackBishops & fromBB) move_piece(blackBishops, fromBB, toBB);
+            else if (blackRooks & fromBB) {
+                move_piece(blackRooks, fromBB, toBB);
+                if (from == h8) castlingRights &= ~(1 << 1);
+                else if (from == a8) castlingRights &= ~(1 << 0);
+            }
+            else if (blackQueens & fromBB) move_piece(blackQueens, fromBB, toBB);
+            else if (blackKing & fromBB) {
+                move_piece(blackKing, fromBB, toBB);
+                blackKingPos = to;
+                castlingRights &= ~(1 << 1 | 1 << 0);
+
+                if (from == e8 && to == g8) {
+                    move_piece(blackRooks, 1ULL << h8, 1ULL << f8);
+                } else if (from == e8 && to == c8) {
+                    move_piece(blackRooks, 1ULL << a8, 1ULL << d8);
+                }
+            }
+
+            whitePawns   &= ~toBB;
+            whiteKnights &= ~toBB;
+            whiteBishops &= ~toBB;
+            whiteRooks   &= ~toBB;
+            whiteQueens  &= ~toBB;
+            whiteKing    &= ~toBB;
+        }
+
+        // Halfmove clock reset
+        if ((whitePawns | blackPawns) & toBB || move.isEnPassant ||
+            ((whitePieces | blackPieces) & toBB)) {
+            halfmoveClock = 0;
+        } else {
+            halfmoveClock++;
+        }
+
+        // Toggle turn
+        whiteToMove = !whiteToMove;
+        if (!whiteToMove) fullmoveNumber++;
+
+        // Update occupancy and attacks
+        UpdateOccupancy();
+        UpdateAttacks();
     }
-    bool is_king_in_check(bool white) { return false; }
+
+
+
+    bool is_king_in_check(bool white) {
+        return white ? (blackAttacks & (1ULL << whiteKingPos)) != 0
+                    : (whiteAttacks & (1ULL << blackKingPos)) != 0;
+    }
+
 
 
     void UpdateOccupancy() {
         whitePieces = whitePawns | whiteKnights | whiteBishops | whiteRooks | whiteQueens | whiteKing;
         blackPieces = blackPawns | blackKnights | blackBishops | blackRooks | blackQueens | blackKing;
         allPieces = whitePieces | blackPieces;
+
+        whiteKingPos = __builtin_ctzll(whiteKing);
+        blackKingPos = __builtin_ctzll(blackKing);
     }
 
     bool hasEnPassant() const {
@@ -342,49 +508,6 @@ public:
         return enPassantSquare & 0b00111111;
     }
 
-};
-
-vector<Move> GenerateLegalMoves(Board& board) {
-    vector<Move> pseudoMoves = GeneratePseudoLegalMoves(board, board.whiteToMove);
-    vector<Move> legalMoves;
-    legalMoves.reserve(pseudoMoves.size());
-
-    for (const Move& move : pseudoMoves) {
-        Board temp = board;
-        temp.make_move(move);
-        if (!temp.is_king_in_check(!temp.whiteToMove)) { // check if own king is not in check
-            legalMoves.push_back(move);
-        }
-    }
-
-    return legalMoves;
-}
-
-
-vector<Move> GeneratePseudoLegalMoves(Board& board, bool isWhiteToMove) {
-    vector<Move> moves;
-    moves.reserve(256);
-    uint8_t epTarget = board.hasEnPassant() ? board.getEnPassantTarget() : 64;
-
-    if (isWhiteToMove) {
-        GenerateSlidingMoves(board.whiteBishops, bishopDirs, std::size(bishopDirs), board.whitePieces, board.blackPieces, moves);
-        GenerateSlidingMoves(board.whiteRooks,   rookDirs,   std::size(rookDirs),   board.whitePieces, board.blackPieces, moves);
-        GenerateSlidingMoves(board.whiteQueens,  queenDirs,  std::size(queenDirs),  board.whitePieces, board.blackPieces, moves);
-        GenerateNonSlidingMoves(board.whiteKnights, knightAttacks, board.whitePieces, moves);
-        GenerateNonSlidingMoves(board.whiteKing, kingAttacks, board.whitePieces, moves);
-        GeneratePawnMoves(board.whitePawns, board.blackPieces, board.allPieces, moves, WHITE, epTarget);
-        GenerateCastlingMoves(board.whiteKing, board.whiteRooks, board.castlingRights, board.allPieces, moves, WHITE);
-    } else {
-        GenerateSlidingMoves(board.blackBishops, bishopDirs, std::size(bishopDirs), board.blackPieces, board.whitePieces, moves);
-        GenerateSlidingMoves(board.blackRooks,   rookDirs,   std::size(rookDirs),   board.blackPieces, board.whitePieces, moves);
-        GenerateSlidingMoves(board.blackQueens,  queenDirs,  std::size(queenDirs),  board.blackPieces, board.whitePieces, moves);
-        GenerateNonSlidingMoves(board.blackKnights, knightAttacks, board.blackPieces, moves);
-        GenerateNonSlidingMoves(board.blackKing, kingAttacks, board.blackPieces, moves);
-        GeneratePawnMoves(board.blackPawns, board.blackPieces, board.allPieces, moves, BLACK, epTarget);
-        GenerateCastlingMoves(board.blackKing, board.blackRooks, board.castlingRights, board.allPieces, moves, BLACK);
-    }
-
-    return moves;
 };
 
 void GenerateCastlingMoves(uint64_t king, uint64_t rooks, uint8_t castlingRights, uint64_t all, vector<Move>& moves, Color color) {
@@ -502,6 +625,50 @@ void GeneratePawnMoves(uint64_t pawns, uint64_t enemy, uint64_t all, vector<Move
     }
 }
 
+vector<Move> GeneratePseudoLegalMoves(Board& board, bool isWhiteToMove) {
+    vector<Move> moves;
+    moves.reserve(256);
+    uint8_t epTarget = board.hasEnPassant() ? board.getEnPassantTarget() : 64;
+
+    if (isWhiteToMove) {
+        GenerateSlidingMoves(board.whiteBishops, bishopDirs, std::size(bishopDirs), board.whitePieces, board.blackPieces, moves);
+        GenerateSlidingMoves(board.whiteRooks,   rookDirs,   std::size(rookDirs),   board.whitePieces, board.blackPieces, moves);
+        GenerateSlidingMoves(board.whiteQueens,  queenDirs,  std::size(queenDirs),  board.whitePieces, board.blackPieces, moves);
+        GenerateNonSlidingMoves(board.whiteKnights, knightAttacks, board.whitePieces, moves);
+        GenerateNonSlidingMoves(board.whiteKing, kingAttacks, board.whitePieces, moves);
+        GeneratePawnMoves(board.whitePawns, board.blackPieces, board.allPieces, moves, WHITE, epTarget);
+        GenerateCastlingMoves(board.whiteKing, board.whiteRooks, board.castlingRights, board.allPieces, moves, WHITE);
+    } else {
+        GenerateSlidingMoves(board.blackBishops, bishopDirs, std::size(bishopDirs), board.blackPieces, board.whitePieces, moves);
+        GenerateSlidingMoves(board.blackRooks,   rookDirs,   std::size(rookDirs),   board.blackPieces, board.whitePieces, moves);
+        GenerateSlidingMoves(board.blackQueens,  queenDirs,  std::size(queenDirs),  board.blackPieces, board.whitePieces, moves);
+        GenerateNonSlidingMoves(board.blackKnights, knightAttacks, board.blackPieces, moves);
+        GenerateNonSlidingMoves(board.blackKing, kingAttacks, board.blackPieces, moves);
+        GeneratePawnMoves(board.blackPawns, board.whitePieces, board.allPieces, moves, BLACK, epTarget);
+        GenerateCastlingMoves(board.blackKing, board.blackRooks, board.castlingRights, board.allPieces, moves, BLACK);
+    }
+
+    return moves;
+};
+
+vector<Move> GenerateLegalMoves(Board& board) {
+    vector<Move> pseudoMoves = GeneratePseudoLegalMoves(board, board.whiteToMove);
+    vector<Move> legalMoves;
+    legalMoves.reserve(pseudoMoves.size());
+
+    for (const Move& move : pseudoMoves) {
+        Board temp = board;
+        temp.make_move(move);
+        cout << indexToSquare(move.from) << indexToSquare(move.to) << ": " << temp.allPieces << endl << flush;
+        cout << "ATK BB: " << temp.whiteAttacks << endl << flush;
+        if (!temp.is_king_in_check(!temp.whiteToMove)) { // check if own king is not in check
+            legalMoves.push_back(move);
+        }
+    }
+
+    return legalMoves;
+}
+
 
 string extractFen(const string& input) {
     if (input.rfind("position startpos", 0) == 0) {
@@ -522,7 +689,6 @@ string extractFen(const string& input) {
 }
 
 int main() {
-    cout << "Neptune 1.0 by Jupyter\n";
     cout.flush();
 
     string line;
@@ -538,10 +704,21 @@ int main() {
         } else if (line.rfind("position", 0) == 0) {
             string fen = extractFen(line);
             board.setBB(fen);
-            cout << "info string position set" << endl << flush;
+            cout << "read fen " << fen << endl << flush;
         } else if (line.rfind("go", 0) == 0) {
-            // find best move (for now, hardcode a move)
-            cout << "bestmove e2e4" << endl << flush;
+            vector<Move> legalMoves = GenerateLegalMoves(board);
+            cout << "found " << legalMoves.size() << " legal moves" << endl << flush;
+            cout << "Legal Moves: ";
+            for (const auto& move : legalMoves) {
+                std::cout << indexToSquare(move.from) << indexToSquare(move.to) << " ";
+            }
+            std::cout << std::endl;
+            std::default_random_engine engine(std::chrono::system_clock::now().time_since_epoch().count());
+            std::uniform_int_distribution<int> dist(0, legalMoves.size() - 1);
+            int randomIndex = dist(engine);
+            Move bestMove = legalMoves[randomIndex];
+            string bestUCI = indexToSquare(bestMove.from) + indexToSquare(bestMove.to);
+            cout << "bestmove " << bestUCI << endl << flush;
         } else if (line == "quit") {
             break;
         }
