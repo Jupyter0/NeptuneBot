@@ -58,3 +58,5 @@ Thumbs.db
 
 # =============== Environment ===============
 .env
+.env.botA
+.env.botB

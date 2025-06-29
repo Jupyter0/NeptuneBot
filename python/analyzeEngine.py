@@ -1,84 +1,101 @@
 import subprocess
-import requests
 import time
 import os
-import json
+import requests
+from dotenv import load_dotenv
 
-# Set these before running
-BOT_A_ENV = ".env.botA"
-BOT_B_ENV = ".env.botB"
-BOT_A_USERNAME = "NeptuneBotA"
-BOT_B_USERNAME = "NeptuneBotB"
-BOT_A_TOKEN = os.getenv("BOT_A_TOKEN")
-BOT_B_TOKEN = os.getenv("BOT_B_TOKEN")
+# === CONFIGURATION ===
+bot1_env = ".env.botA"
+bot2_env = ".env.botB"
+bot1_username = "Neptune-Bot"
+bot2_username = "Neptune-Backup"
 
-def start_bot(env_file):
-    return subprocess.Popen(["dotnet", "run", env_file])
+load_dotenv()
 
-def send_challenge(from_token, to_username):
-    headers = {"Authorization": f"Bearer {from_token}"}
-    res = requests.post(f"https://lichess.org/api/challenge/{to_username}", headers=headers)
+bot1_token = os.getenv("BOT1_TOKEN")  # Or load from file
+bot2_token = os.getenv("BOT2_TOKEN")
+
+# === UTILITY ===
+def launch_bot(env_file, username):
+    return subprocess.Popen(["dotnet", "run", env_file, username])
+
+def challenge_bot(from_token, to_username):
+    print(f"[INFO] Sending challenge to {to_username}")
+    res = requests.post(
+        f"https://lichess.org/api/challenge/{to_username}",
+        headers={
+            "Authorization": f"Bearer {from_token}",
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
+        data={
+            "rated": "false",
+            "clock.limit": "60",
+            "clock.increment": "1",
+            "color": "white"
+        }
+    )
     if res.status_code == 200:
-        challenge_id = res.json()['challenge']['id']
-        print(f"[INFO] Challenge sent: {challenge_id}")
-        return challenge_id
+        print("[INFO] Challenge sent.")
+        return res.json()['id']
     else:
-        print(f"[ERROR] Failed to send challenge: {res.text}")
+        print(f"[ERROR] Challenge failed: {res.status_code} {res.text}")
         return None
 
-def wait_for_game_start(from_token, challenge_id):
-    headers = {"Authorization": f"Bearer {from_token}"}
-    stream_url = f"https://lichess.org/api/stream/event"
-    with requests.get(stream_url, headers=headers, stream=True) as res:
-        for line in res.iter_lines():
-            if not line: continue
-            event = json.loads(line.decode("utf-8"))
-            if event.get("type") == "gameStart":
-                game_id = event["game"]["id"]
-                print(f"[INFO] Game started: {game_id}")
-                return game_id
+def wait_for_game_end(game_id, token, poll_interval=2):
+    print(f"[INFO] Polling game {game_id} for end status...")
+    headers = {"Authorization": f"Bearer {token}"}
+    url = f"https://lichess.org/api/game/{game_id}"
 
-def wait_for_game_end(bot_token, game_id):
-    headers = {"Authorization": f"Bearer {bot_token}"}
-    url = f"https://lichess.org/api/bot/game/stream/{game_id}"
-    with requests.get(url, headers=headers, stream=True) as res:
-        for line in res.iter_lines():
-            if not line: continue
-            event = json.loads(line.decode("utf-8"))
-            if event.get("type") == "gameFull":
-                print(f"[DEBUG] Game started: {game_id}")
-            elif event.get("type") == "gameState":
-                if event.get("status") in ("mate", "resign", "timeout", "draw", "aborted"):
-                    print(f"[INFO] Game over: {event['status']}")
-                    return
+    while True:
+        res = requests.get(url, headers=headers)
+        if res.status_code != 200:
+            print(f"[ERROR] Could not check game state: {res.status_code}")
+            break
 
-def main():
-    print("[INFO] Starting bots...")
-    bot_a_proc = start_bot(BOT_A_ENV)
-    bot_b_proc = start_bot(BOT_B_ENV)
-    time.sleep(3)
+        data = res.json()
+        status = data.get("status", "").lower()
+        if status in ("mate", "resign", "draw", "timeout", "outoftime", "aborted"):
+            print(f"[INFO] Game ended with status: {status}")
+            break
 
+        time.sleep(poll_interval)
+
+# === MAIN LOOP ===
+while True:
     try:
-        while True:
-            challenge_id = send_challenge(BOT_A_TOKEN, BOT_B_USERNAME)
-            if not challenge_id:
-                time.sleep(5)
-                continue
+        print("[INFO] Starting bots...")
+        bot1 = launch_bot(bot1_env, bot1_username)
+        bot2 = launch_bot(bot2_env, bot2_username)
 
-            game_id = wait_for_game_start(BOT_A_TOKEN, challenge_id)
-            if not game_id:
-                continue
+        time.sleep(3)  # Give bots time to connect
 
-            wait_for_game_end(BOT_A_TOKEN, game_id)
-            print("[INFO] Restarting for next game...\n")
-            time.sleep(2)
-    finally:
-        print("[INFO] Shutting down bots.")
-        bot_a_proc.kill()
-        bot_b_proc.kill()
+        challenge_id = challenge_bot(bot1_token, bot2_username)
+        if not challenge_id:
+            print("[ERROR] Failed to challenge. Killing bots and retrying.")
+            bot1.kill()
+            bot2.kill()
+            time.sleep(5)
+            continue
 
-if __name__ == "__main__":
-    if not BOT_A_TOKEN or not BOT_B_TOKEN:
-        print("[ERROR] Set BOT_A_TOKEN and BOT_B_TOKEN as environment variables.")
-        exit(1)
-    main()
+        # Wait a bit for game to start and get ID
+        time.sleep(5)
+        game_id = challenge_id
+
+        if not game_id:
+            print("[ERROR] Game ID not found. Killing bots and retrying.")
+            bot1.kill()
+            bot2.kill()
+            time.sleep(5)
+            continue
+
+        wait_for_game_end(game_id, bot1_token)
+
+        print("[INFO] Game complete. Restarting bots.")
+        bot1.kill()
+        bot2.kill()
+        time.sleep(3)
+    except(KeyboardInterrupt):
+        bot1.kill()
+        bot2.kill()
+        print("\nKeyboard Interupt Detected. Stopping bots.")
+        quit()

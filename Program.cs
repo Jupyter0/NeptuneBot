@@ -4,12 +4,16 @@ using System.Text;
 
 class Program
 {
-    static readonly string botUsername = "Neptune-Bot";
+    static string botUsername = "";
     static readonly HttpClient client = new HttpClient();
+    
 
     static async Task Main(string[] args)
     {
-        string envFile = args.Length > 0 ? args[0] : ".env";
+        if (args.Length != 2) Environment.Exit(160);
+        
+        string envFile = args[0].Length > 0 ? args[0] : ".env";
+        botUsername = args[1].Length > 0 ? args[1] : "Neptune-Bot";
         DotNetEnv.Env.Load(envFile);
 
         string token = Environment.GetEnvironmentVariable("LICHESS_TOKEN")
@@ -18,10 +22,9 @@ class Program
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
+
         var stream = await client.GetStreamAsync("https://lichess.org/api/stream/event");
         using var reader = new StreamReader(stream);
-
-        Console.WriteLine("[INFO] Listening for events...");
 
         while (!reader.EndOfStream)
         {
@@ -32,7 +35,6 @@ class Program
             if (!doc.RootElement.TryGetProperty("type", out var typeElement)) continue;
 
             var type = typeElement.GetString();
-            Console.WriteLine($"[DEBUG] Event type: {type}");
 
             if (type == "gameStart") await HandleGameStart(doc);
             else if (type == "challenge") await HandleChallenge(doc);
@@ -208,10 +210,9 @@ class Program
         await engine.StandardInput.FlushAsync();
 
         string? line;
-        Console.WriteLine($"[DEBUG] Listening for Neptune IO");
         while ((line = await engine.StandardOutput.ReadLineAsync()) != null)
         {
-            Console.WriteLine($"[Neptune]: {line}");
+            //Console.WriteLine($"[Neptune]: {line}");
             if (line.StartsWith("bestmove"))
             {
                 try { engine.Kill(); } catch { }
@@ -225,12 +226,27 @@ class Program
 
     static async Task SendMove(string gameId, string move)
     {
-        Console.WriteLine($"[DEBUG] Attempting to send move: {move}");
-        var res = await client.PostAsync($"https://lichess.org/api/bot/game/{gameId}/move/{move}", null);
+        move = move.Trim();
+        gameId = gameId.Trim();
+        move = new string(move.Where(c => c >= 32 && c <= 126).ToArray());
+        var request = new HttpRequestMessage
+        {
+            Method = HttpMethod.Post,
+            RequestUri = new Uri($"https://lichess.org/api/bot/game/{gameId.Trim()}/move/{move}"),
+            Content = null
+        };
+        var res = await client.SendAsync(request);
+
         if (res.IsSuccessStatusCode)
-            Console.WriteLine($"[MOVE] {move} sent for {gameId}");
+        {
+            Console.WriteLine($"[MOVE] {move} sent successfully");
+        }
         else
-            Console.WriteLine($"[ERROR] Failed to send move: {res.ReasonPhrase}");
+        {
+            var errorBody = await res.Content.ReadAsStringAsync();
+            Console.WriteLine($"[ERROR] Failed to send move: {(int)res.StatusCode} {res.ReasonPhrase}");
+            Console.WriteLine($"[ERROR] Response content: {errorBody}");
+        }
     }
 }
 
