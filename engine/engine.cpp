@@ -143,7 +143,7 @@ enum Color {
 struct Move {
     int from;
     int to;
-    char promotion = ' ';
+    char promotion;
     bool isEnPassant = false;
 
     Move(int From, int To, char Promotion = 0, bool EP = false) : from(From), to(To), promotion(Promotion), isEnPassant(EP) {}
@@ -658,14 +658,7 @@ vector<Move> GenerateLegalMoves(Board& board) {
 
     for (const Move& move : pseudoMoves) {
         Board temp = board;
-        cout << "--- DEBUG ---" << endl << flush;
-        cout << "Move: " << indexToSquare(move.from) << indexToSquare(move.to) << move.promotion << endl << flush;
-        cout << "Pieces premove: " << temp.allPieces << endl << flush;
         temp.make_move(move);
-        cout << "Pieces postmove: " << temp.allPieces << endl << flush;
-        cout << "White ATK: " << temp.whiteAttacks << endl << flush;
-        cout << "Black ATK: " << temp.blackAttacks << endl << flush;
-        cout << endl << flush;
         if (!temp.is_king_in_check(!temp.whiteToMove)) { // check if own king is not in check
             legalMoves.push_back(move);
         }
@@ -676,26 +669,18 @@ vector<Move> GenerateLegalMoves(Board& board) {
 
 
 string extractFen(const string& input) {
-    if (input.rfind("position startpos", 0) == 0) {
+    if (input.rfind("initial startpos", 0) == 0) {
         return "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     }
-    const string prefix = "position fen ";
+    const string prefix = "initial ";
     size_t start = input.find(prefix);
     if (start == string::npos) return "";
 
     start += prefix.size();
-    size_t movesPos = input.find(" moves ", start);
-
-    if (movesPos == string::npos) {
-        return input.substr(start);
-    } else {
-        return input.substr(start, movesPos - start);
-    }
+    return input.substr(start);
 }
 
 int main() {
-    cout.flush();
-
     string line;
 
     Board board;
@@ -706,25 +691,43 @@ int main() {
             cout << "uciok" << endl << flush;
         } else if (line == "isready") {
             cout << "readyok" << endl << flush;
-        } else if (line.rfind("position", 0) == 0) {
+        } else if (line.rfind("initial", 0) == 0) {
+            auto start_time = chrono::high_resolution_clock::now();
+
             string fen = extractFen(line);
             board.setBB(fen);
-            cout << "read fen " << fen << endl << flush;
+
+            auto end_time = chrono::high_resolution_clock::now();
+            auto duration = chrono::duration_cast<chrono::nanoseconds>(end_time-start_time);
+            cout << "[TIME] Bitboards Generated in " << duration.count() << " ns" << endl << flush;
+            cout << "initialok" << endl << flush;
+        } else if (line.rfind("move", 0) == 0) {
+            if (line == "move start") continue;
+            string move = line.substr(5);
+
+            uint8_t from = (move.substr(1, 1)[0] - '1') *8 + (move.substr(0, 1)[0] - 'a');
+            uint8_t to = (move.substr(3, 1)[0] - '1') *8 + (move.substr(2, 1)[0] - 'a');
+
+            bool isEnPassant = false;
+            if (board.hasEnPassant()) {
+                uint64_t pawns = board.whiteToMove ? board.whitePawns : board.blackPawns;
+                isEnPassant = (to == board.getEnPassantTarget()) && ((pawns & (1ULL << from) != 0));
+            }
+            
+            char promotion = 0;
+            if (move.length() == 5) {
+                promotion = move[4];
+            }
+            board.make_move(Move(from, to, promotion, isEnPassant));
         } else if (line.rfind("go", 0) == 0) {
             vector<Move> legalMoves = GenerateLegalMoves(board);
-            cout << "found " << legalMoves.size() << " legal moves" << endl << flush;
-            cout << "Legal Moves: ";
-            for (const auto& move : legalMoves) {
-                string promotion = move.promotion == ' ' ? "" : string(1, move.promotion);
-                cout << indexToSquare(move.from) << indexToSquare(move.to) << promotion << " ";
-            }
-            std::cout << std::endl;
             std::default_random_engine engine(std::chrono::system_clock::now().time_since_epoch().count());
             std::uniform_int_distribution<int> dist(0, legalMoves.size() - 1);
             int randomIndex = dist(engine);
             Move bestMove = legalMoves[randomIndex];
             string promotion = bestMove.promotion == ' ' ? "" : string(1, bestMove.promotion);
             string bestUCI = indexToSquare(bestMove.from) + indexToSquare(bestMove.to) + promotion;
+            board.make_move(bestMove);
             cout << "bestmove " << bestUCI << endl << flush;
         } else if (line == "quit") {
             break;

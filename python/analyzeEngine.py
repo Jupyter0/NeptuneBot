@@ -42,7 +42,6 @@ def challenge_bot(from_token, to_username):
         return None
 
 def wait_for_game_end(game_id, token, poll_interval=2):
-    print(f"[INFO] Polling game {game_id} for end status...")
     headers = {"Authorization": f"Bearer {token}"}
     url = f"https://lichess.org/api/game/{game_id}"
 
