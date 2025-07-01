@@ -8,6 +8,8 @@
 #include <iterator>
 #include <random>
 #include <chrono>
+#include <cstring>
+
 
 using namespace std;
 
@@ -122,15 +124,7 @@ constexpr uint64_t rank6 = 0x0000FF0000000000ULL;
 constexpr uint64_t rank7 = 0x00FF000000000000ULL;
 constexpr uint64_t rank8 = 0xFF00000000000000ULL;
 
-string indexToSquare(int index) {
-    int file = index & 7;  // 0 to 7
-    int rank = index >> 3;  // 0 to 7
 
-    char fileChar = 'a' + file;       // 'a' to 'h'
-    char rankChar = '1' + rank;       // '1' to '8'
-
-    return string() + fileChar + rankChar;
-}
 
 enum Piece {
     EMPTY, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING
@@ -148,6 +142,28 @@ struct Move {
 
     Move(int From, int To, char Promotion = 0, bool EP = false) : from(From), to(To), promotion(Promotion), isEnPassant(EP) {}
 };
+string indexToSquare(int index) {
+    int file = index & 7;  // 0 to 7
+    int rank = index >> 3;  // 0 to 7
+
+    char fileChar = 'a' + file;       // 'a' to 'h'
+    char rankChar = '1' + rank;       // '1' to '8'
+
+    return string() + fileChar + rankChar;
+}
+
+Piece charToPiece(char pieceChar) {
+    pieceChar = tolower(pieceChar);
+    switch (pieceChar) {
+        case 'p': return PAWN; break;
+        case 'n': return KNIGHT; break;
+        case 'b': return BISHOP; break;
+        case 'r': return ROOK; break;
+        case 'q': return QUEEN; break;
+        case 'k': return KING; break;
+        default: return EMPTY; break;
+    }
+}
 
 class Board {
 public:
@@ -173,6 +189,8 @@ public:
     uint8_t fullmoveNumber; //Counts the move number
 
     uint64_t zobristKey = 0ULL; //Zobrist Hash !!Don't use this, this feature is not yet implemented!!
+
+    Piece pieceAt[64];
 
     void setBB(const string& fen) {
         if (fen.length() == 0) return;
@@ -221,6 +239,7 @@ public:
         fullmoveNumber = std::stoi(fields[5]);
 
         UpdateOccupancy();
+        UpdateAttacks();
     }
 
     void UpdateAttacks() {
@@ -316,25 +335,28 @@ public:
             for (uint8_t j = 0; j < ranks[i].length(); j++) {
                 char piece = ranks[i][j];
                 if (isdigit(piece)) {
-                    file += piece - '0';
+                    for (int k = 0; k < (piece - '0'); k++) {
+                        pieceAt[(7-i)*8 + file] = EMPTY;
+                        file++;
+                    }
                     continue;
                 }
                 uint8_t squareIndex = (7-i)*8 + file; // Board square index: a1 = 0, h8 = 63 (bottom-left to top-right)
                 switch (piece) {
-                        case 'P': whitePawns     |= 1ULL << squareIndex; break;
-                        case 'N': whiteKnights   |= 1ULL << squareIndex; break;
-                        case 'B': whiteBishops   |= 1ULL << squareIndex; break;
-                        case 'R': whiteRooks     |= 1ULL << squareIndex; break;
-                        case 'Q': whiteQueens    |= 1ULL << squareIndex; break;
-                        case 'K': whiteKing      |= 1ULL << squareIndex; break;
+                        case 'P': whitePawns     |= 1ULL << squareIndex; pieceAt[squareIndex] = PAWN;   break;
+                        case 'N': whiteKnights   |= 1ULL << squareIndex; pieceAt[squareIndex] = KNIGHT; break;
+                        case 'B': whiteBishops   |= 1ULL << squareIndex; pieceAt[squareIndex] = BISHOP; break;
+                        case 'R': whiteRooks     |= 1ULL << squareIndex; pieceAt[squareIndex] = ROOK;   break;
+                        case 'Q': whiteQueens    |= 1ULL << squareIndex; pieceAt[squareIndex] = QUEEN;  break;
+                        case 'K': whiteKing      |= 1ULL << squareIndex; pieceAt[squareIndex] = KING;   break;
 
-                        case 'p': blackPawns     |= 1ULL << squareIndex; break;
-                        case 'n': blackKnights   |= 1ULL << squareIndex; break;
-                        case 'b': blackBishops   |= 1ULL << squareIndex; break;
-                        case 'r': blackRooks     |= 1ULL << squareIndex; break;
-                        case 'q': blackQueens    |= 1ULL << squareIndex; break;
-                        case 'k': blackKing      |= 1ULL << squareIndex; break;
-                        default: cerr << "[Warning]: Unknown piece character '" << piece << "'\n"; break;
+                        case 'p': blackPawns     |= 1ULL << squareIndex; pieceAt[squareIndex] = PAWN;   break;
+                        case 'n': blackKnights   |= 1ULL << squareIndex; pieceAt[squareIndex] = KNIGHT; break;
+                        case 'b': blackBishops   |= 1ULL << squareIndex; pieceAt[squareIndex] = BISHOP; break;
+                        case 'r': blackRooks     |= 1ULL << squareIndex; pieceAt[squareIndex] = ROOK;   break;
+                        case 'q': blackQueens    |= 1ULL << squareIndex; pieceAt[squareIndex] = QUEEN;  break;
+                        case 'k': blackKing      |= 1ULL << squareIndex; pieceAt[squareIndex] = KING;   break;
+                        default: cerr << "[WARNING]: Unknown piece character '" << piece << "'\n"; break;
                 }
                 file++;
             }
@@ -347,136 +369,127 @@ public:
         bool isWhite = whiteToMove;
         uint64_t fromBB = 1ULL << from;
         uint64_t toBB = 1ULL << to;
+        enPassantSquare = 64;
+        halfmoveClock++;
+        Piece movedPiece = pieceAt[from];
+        pieceAt[from] = EMPTY;
+        pieceAt[to] = movedPiece;
 
-        // Remove en passant target
-        enPassantSquare = 0;
-
-        // Handle piece movement and captures
         auto move_piece = [&](uint64_t& bb, uint64_t from, uint64_t to) {
             bb &= ~from;
             bb |= to;
         };
 
-        // Find and move the correct piece
-        uint64_t movedBB = fromBB;
         if (isWhite) {
-            if (whitePawns & fromBB) {
-                move_piece(whitePawns, fromBB, toBB);
-
-                // En passant capture
-                if (move.isEnPassant) {
-                    blackPawns &= ~(1ULL << (to - 8));
-                }
-
-                // Double pawn push: set en passant target
-                if ((fromBB & rank2) && (toBB & rank4)) {
-                    enPassantSquare = (1 << 6) | (from + 8); // flag + square
-                }
-
-                // Promotion
-                if (move.promotion) {
-                    whitePawns &= ~toBB;
-                    switch (move.promotion) {
-                        case 'q': whiteQueens |= toBB; break;
-                        case 'r': whiteRooks |= toBB; break;
-                        case 'b': whiteBishops |= toBB; break;
-                        case 'n': whiteKnights |= toBB; break;
-                    }
-                }
-
-            } else if (whiteKnights & fromBB) move_piece(whiteKnights, fromBB, toBB);
-            else if (whiteBishops & fromBB) move_piece(whiteBishops, fromBB, toBB);
-            else if (whiteRooks & fromBB) {
-                move_piece(whiteRooks, fromBB, toBB);
-                // Remove castling rights if rook moves
-                if (from == h1) castlingRights &= ~(1 << 3);
-                else if (from == a1) castlingRights &= ~(1 << 2);
-            }
-            else if (whiteQueens & fromBB) move_piece(whiteQueens, fromBB, toBB);
-            else if (whiteKing & fromBB) {
-                move_piece(whiteKing, fromBB, toBB);
-                whiteKingPos = to;
-                castlingRights &= ~(1 << 3 | 1 << 2); // Lose both rights
-
-                // Castling
-                if (from == e1 && to == g1) { // King-side
-                    move_piece(whiteRooks, 1ULL << h1, 1ULL << f1);
-                } else if (from == e1 && to == c1) { // Queen-side
-                    move_piece(whiteRooks, 1ULL << a1, 1ULL << d1);
-                }
-            }
-
-            // Remove captured black piece
             blackPawns   &= ~toBB;
             blackKnights &= ~toBB;
             blackBishops &= ~toBB;
             blackRooks   &= ~toBB;
             blackQueens  &= ~toBB;
             blackKing    &= ~toBB;
-
-        } else { // Black move
-            if (blackPawns & fromBB) {
-                move_piece(blackPawns, fromBB, toBB);
-
-                if (move.isEnPassant) {
-                    whitePawns &= ~(1ULL << (to + 8));
-                }
-
-                if ((fromBB & rank7) && (toBB & rank5)) {
-                    enPassantSquare = (1 << 6) | (from - 8);
-                }
-
-                if (move.promotion) {
-                    blackPawns &= ~toBB;
-                    switch (move.promotion) {
-                        case 'q': blackQueens |= toBB; break;
-                        case 'r': blackRooks |= toBB; break;
-                        case 'b': blackBishops |= toBB; break;
-                        case 'n': blackKnights |= toBB; break;
+            switch (movedPiece) {
+                case PAWN: {
+                    move_piece(whitePawns, fromBB, toBB);
+                    halfmoveClock = 0;
+                    if (move.isEnPassant) {
+                        blackPawns &= ~(1ULL << (to - 8));
+                        pieceAt[to - 8] = EMPTY;
                     }
+                    if ((fromBB & rank2) && (toBB & rank4)) {
+                        enPassantSquare = (1 << 6) | (from + 8);
+                    }
+                    if (move.promotion) {
+                        whitePawns &= ~toBB;
+                        switch (move.promotion) {
+                            case 'q': whiteQueens |= toBB; pieceAt[to] = QUEEN; break;
+                            case 'r': whiteRooks |= toBB; pieceAt[to] = ROOK; break;
+                            case 'b': whiteBishops |= toBB; pieceAt[to] = BISHOP; break;
+                            case 'n': whiteKnights |= toBB; pieceAt[to] = KNIGHT; break;
+                        }
+                    }
+                    break;
                 }
+                case KNIGHT: move_piece(whiteKnights, fromBB, toBB); break;
+                case BISHOP: move_piece(whiteBishops, fromBB, toBB); break;
+                case ROOK: {
+                    move_piece(whiteRooks, fromBB, toBB);
+                    if (from == h1) castlingRights &= ~(1 << 3);
+                    else if (from == a1) castlingRights &= ~(1 << 2);
+                    break;
+                }
+                case QUEEN: move_piece(whiteQueens, fromBB, toBB); break;
+                case KING: {
+                    move_piece(whiteKing, fromBB, toBB);
+                    whiteKingPos = to;
+                    castlingRights &= ~(1 << 3 | 1 << 2);
 
-            } else if (blackKnights & fromBB) move_piece(blackKnights, fromBB, toBB);
-            else if (blackBishops & fromBB) move_piece(blackBishops, fromBB, toBB);
-            else if (blackRooks & fromBB) {
-                move_piece(blackRooks, fromBB, toBB);
-                if (from == h8) castlingRights &= ~(1 << 1);
-                else if (from == a8) castlingRights &= ~(1 << 0);
-            }
-            else if (blackQueens & fromBB) move_piece(blackQueens, fromBB, toBB);
-            else if (blackKing & fromBB) {
-                move_piece(blackKing, fromBB, toBB);
-                blackKingPos = to;
-                castlingRights &= ~(1 << 1 | 1 << 0);
-
-                if (from == e8 && to == g8) {
-                    move_piece(blackRooks, 1ULL << h8, 1ULL << f8);
-                } else if (from == e8 && to == c8) {
-                    move_piece(blackRooks, 1ULL << a8, 1ULL << d8);
+                    if (from == e1 && to == g1) {
+                        move_piece(whiteRooks, 1ULL << h1, 1ULL << f1);
+                    } else if (from == e1 && to == c1) {
+                        move_piece(whiteRooks, 1ULL << a1, 1ULL << d1);
+                    }
+                    break;
                 }
             }
-
+        } else {
             whitePawns   &= ~toBB;
             whiteKnights &= ~toBB;
             whiteBishops &= ~toBB;
             whiteRooks   &= ~toBB;
             whiteQueens  &= ~toBB;
             whiteKing    &= ~toBB;
+            switch (movedPiece) {
+                case PAWN: {
+                    move_piece(blackPawns, fromBB, toBB);
+                    halfmoveClock = 0;
+                    if (move.isEnPassant) {
+                        whitePawns &= ~(1ULL << (to + 8));
+                        pieceAt[to + 8] = EMPTY;
+                    }
+                    if ((fromBB & rank7) && (toBB & rank5)) {
+                        enPassantSquare = (1 << 6) | (from - 8);
+                    }
+                    if (move.promotion) {
+                        blackPawns &= ~toBB;
+                        switch (move.promotion) {
+                            case 'q': blackQueens |= toBB; pieceAt[to] = QUEEN; break;
+                            case 'r': blackRooks |= toBB; pieceAt[to] = ROOK; break;
+                            case 'b': blackBishops |= toBB; pieceAt[to] = BISHOP; break;
+                            case 'n': blackKnights |= toBB; pieceAt[to] = KNIGHT; break;
+                        }
+                    }
+                    break;
+                }
+                case KNIGHT: move_piece(blackKnights, fromBB, toBB); break;
+                case BISHOP: move_piece(blackBishops, fromBB, toBB); break;
+                case ROOK: {
+                    move_piece(blackRooks, fromBB, toBB);
+                    if (from == h8) castlingRights &= ~(1 << 1);
+                    else if (from == a8) castlingRights &= ~(1 << 0);
+                    break;
+                }
+                case QUEEN: move_piece(blackQueens, fromBB, toBB); break;
+                case KING: {
+                    move_piece(blackKing, fromBB, toBB);
+                    blackKingPos = to;
+                    castlingRights &= ~(1 << 1 | 1 << 0);
+
+                    if (from == e8 && to == g8) {
+                        move_piece(blackRooks, 1ULL << h8, 1ULL << f8);
+                    } else if (from == e8 && to == c8) {
+                        move_piece(blackRooks, 1ULL << a8, 1ULL << d8);
+                    }
+                    break;
+                }
+            }
         }
 
-        // Halfmove clock reset
-        if ((whitePawns | blackPawns) & toBB || move.isEnPassant ||
-            ((whitePieces | blackPieces) & toBB)) {
-            halfmoveClock = 0;
-        } else {
-            halfmoveClock++;
-        }
+        bool isCapture = (whitePieces | blackPieces) & toBB;
+        if (isCapture) halfmoveClock = 0;
 
-        // Toggle turn
         whiteToMove = !whiteToMove;
         if (!whiteToMove) fullmoveNumber++;
 
-        // Update occupancy and attacks
         UpdateOccupancy();
         UpdateAttacks();
     }
@@ -658,6 +671,28 @@ vector<Move> GenerateLegalMoves(Board& board) {
 
     for (const Move& move : pseudoMoves) {
         Board temp = board;
+        cout << "[TIME] ---- " << indexToSquare(move.from) << indexToSquare(move.to) << (move.promotion == 0 ? "" : ("" + move.promotion))  << " ----" << endl;
+        cout << "[TIME] White pieces: " << temp.whitePieces << endl;
+        cout << "[TIME] Black pieces: " << temp.blackPieces << endl;
+        cout << "[TIME] White attacks: " << temp.whiteAttacks << endl;
+        cout << "[TIME] Black attacks: " << temp.blackAttacks << endl;
+        cout << "[TIME] White King pos: " << to_string(temp.whiteKingPos) << ", " << temp.whiteKing << endl;
+        cout << "[TIME] Black King pos: " << to_string(temp.blackKingPos) << ", " << temp.blackKing << endl;
+        cout << endl;
+        cout << "[TIME] White pawns: " << temp.whitePawns << endl;
+        cout << "[TIME] Black pawns: " << temp.blackPawns << endl;
+        cout << "[TIME] White bishops: " << temp.whiteBishops << endl;
+        cout << "[TIME] Black bishops: " << temp.blackBishops << endl;
+        cout << "[TIME] White knights: " << temp.whiteKnights << endl;
+        cout << "[TIME] Black knights: " << temp.blackKnights << endl;
+        cout << "[TIME] White rooks: " << temp.whiteRooks << endl;
+        cout << "[TIME] Black rooks: " << temp.blackRooks << endl;
+        cout << "[TIME] White queens: " << temp.whiteQueens << endl;
+        cout << "[TIME] Black queens: " << temp.blackQueens << endl;
+        cout << endl;
+        cout << "[TIME] All pieces: " << temp.allPieces << endl;
+        cout << endl;
+        cout << flush;
         temp.make_move(move);
         if (!temp.is_king_in_check(!temp.whiteToMove)) { // check if own king is not in check
             legalMoves.push_back(move);
@@ -669,7 +704,7 @@ vector<Move> GenerateLegalMoves(Board& board) {
 
 
 string extractFen(const string& input) {
-    if (input.rfind("initial startpos", 0) == 0) {
+    if (input.rfind("initial startpos") == 0) {
         return "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     }
     const string prefix = "initial ";
@@ -699,7 +734,7 @@ int main() {
 
             auto end_time = chrono::high_resolution_clock::now();
             auto duration = chrono::duration_cast<chrono::nanoseconds>(end_time-start_time);
-            cout << "[TIME] Bitboards Generated in " << duration.count() << " ns" << endl << flush;
+            //logFile << "[LOG] Bitboards Generated in " << duration.count() << " ns" << "\n" << flush;
             cout << "initialok" << endl << flush;
         } else if (line.rfind("move", 0) == 0) {
             if (line == "move start") continue;
@@ -718,7 +753,11 @@ int main() {
             if (move.length() == 5) {
                 promotion = move[4];
             }
+            auto start_time = chrono::high_resolution_clock::now();
             board.make_move(Move(from, to, promotion, isEnPassant));
+            auto end_time = chrono::high_resolution_clock::now();
+            auto duration = chrono::duration_cast<chrono::nanoseconds>(end_time-start_time);
+            //logFile << "[LOG] Moves Updated in " << duration.count() << " ns\n" << flush;
         } else if (line.rfind("go", 0) == 0) {
             vector<Move> legalMoves = GenerateLegalMoves(board);
             std::default_random_engine engine(std::chrono::system_clock::now().time_since_epoch().count());
@@ -727,7 +766,9 @@ int main() {
             Move bestMove = legalMoves[randomIndex];
             string promotion = bestMove.promotion == ' ' ? "" : string(1, bestMove.promotion);
             string bestUCI = indexToSquare(bestMove.from) + indexToSquare(bestMove.to) + promotion;
+            //logFile << "[LOG] Board State before " << bestUCI << ": "<< board.allPieces << "\n" << flush;
             board.make_move(bestMove);
+            //logFile << "[LOG] Board State after " << bestUCI << ": "<< board.allPieces << "\n" << flush;
             cout << "bestmove " << bestUCI << endl << flush;
         } else if (line == "quit") {
             break;
