@@ -108,6 +108,17 @@ enum Squares {
     a8, b8, c8, d8, e8, f8, g8, h8
 };
 
+constexpr uint64_t bitMasks[64] = {
+    1ULL << a1, 1ULL << b1, 1ULL << c1, 1ULL << d1, 1ULL << e1, 1ULL << f1, 1ULL << g1, 1ULL << h1, 
+    1ULL << a2, 1ULL << b2, 1ULL << c2, 1ULL << d2, 1ULL << e2, 1ULL << f2, 1ULL << g2, 1ULL << h2, 
+    1ULL << a3, 1ULL << b3, 1ULL << c3, 1ULL << d3, 1ULL << e3, 1ULL << f3, 1ULL << g3, 1ULL << h3, 
+    1ULL << a4, 1ULL << b4, 1ULL << c4, 1ULL << d4, 1ULL << e4, 1ULL << f4, 1ULL << g4, 1ULL << h4, 
+    1ULL << a5, 1ULL << b5, 1ULL << c5, 1ULL << d5, 1ULL << e5, 1ULL << f5, 1ULL << g5, 1ULL << h5, 
+    1ULL << a6, 1ULL << b6, 1ULL << c6, 1ULL << d6, 1ULL << e6, 1ULL << f6, 1ULL << g6, 1ULL << h6, 
+    1ULL << a7, 1ULL << b7, 1ULL << c7, 1ULL << d7, 1ULL << e7, 1ULL << f7, 1ULL << g7, 1ULL << h7, 
+    1ULL << a8, 1ULL << b8, 1ULL << c8, 1ULL << d8, 1ULL << e8, 1ULL << f8, 1ULL << g8, 1ULL << h8, 
+};
+
 constexpr uint64_t castlingBB[4] = {
     (1ULL << f1) | (1ULL << g1),              // White king-side
     (1ULL << b1) | (1ULL << c1) | (1ULL << d1), // White queen-side
@@ -137,7 +148,7 @@ enum Color {
 struct Move {
     int from;
     int to;
-    char promotion;
+    char promotion = 0;
     bool isEnPassant = false;
 
     Move(int From, int To, char Promotion = 0, bool EP = false) : from(From), to(To), promotion(Promotion), isEnPassant(EP) {}
@@ -295,7 +306,7 @@ public:
             int f = file + directions[d][1];
             while (r >= 0 && r < 8 && f >= 0 && f < 8) {
                 int target = r * 8 + f;
-                uint64_t targetBB = 1ULL << target;
+                uint64_t targetBB = bitMasks[target];
                 attacks |= targetBB;
                 if (all & targetBB) break;
                 r += directions[d][0];
@@ -343,19 +354,19 @@ public:
                 }
                 uint8_t squareIndex = (7-i)*8 + file; // Board square index: a1 = 0, h8 = 63 (bottom-left to top-right)
                 switch (piece) {
-                        case 'P': whitePawns     |= 1ULL << squareIndex; pieceAt[squareIndex] = PAWN;   break;
-                        case 'N': whiteKnights   |= 1ULL << squareIndex; pieceAt[squareIndex] = KNIGHT; break;
-                        case 'B': whiteBishops   |= 1ULL << squareIndex; pieceAt[squareIndex] = BISHOP; break;
-                        case 'R': whiteRooks     |= 1ULL << squareIndex; pieceAt[squareIndex] = ROOK;   break;
-                        case 'Q': whiteQueens    |= 1ULL << squareIndex; pieceAt[squareIndex] = QUEEN;  break;
-                        case 'K': whiteKing      |= 1ULL << squareIndex; pieceAt[squareIndex] = KING;   break;
+                        case 'P': whitePawns     |= bitMasks[squareIndex]; pieceAt[squareIndex] = PAWN;   break;
+                        case 'N': whiteKnights   |= bitMasks[squareIndex]; pieceAt[squareIndex] = KNIGHT; break;
+                        case 'B': whiteBishops   |= bitMasks[squareIndex]; pieceAt[squareIndex] = BISHOP; break;
+                        case 'R': whiteRooks     |= bitMasks[squareIndex]; pieceAt[squareIndex] = ROOK;   break;
+                        case 'Q': whiteQueens    |= bitMasks[squareIndex]; pieceAt[squareIndex] = QUEEN;  break;
+                        case 'K': whiteKing      |= bitMasks[squareIndex]; pieceAt[squareIndex] = KING;   break;
 
-                        case 'p': blackPawns     |= 1ULL << squareIndex; pieceAt[squareIndex] = PAWN;   break;
-                        case 'n': blackKnights   |= 1ULL << squareIndex; pieceAt[squareIndex] = KNIGHT; break;
-                        case 'b': blackBishops   |= 1ULL << squareIndex; pieceAt[squareIndex] = BISHOP; break;
-                        case 'r': blackRooks     |= 1ULL << squareIndex; pieceAt[squareIndex] = ROOK;   break;
-                        case 'q': blackQueens    |= 1ULL << squareIndex; pieceAt[squareIndex] = QUEEN;  break;
-                        case 'k': blackKing      |= 1ULL << squareIndex; pieceAt[squareIndex] = KING;   break;
+                        case 'p': blackPawns     |= bitMasks[squareIndex]; pieceAt[squareIndex] = PAWN;   break;
+                        case 'n': blackKnights   |= bitMasks[squareIndex]; pieceAt[squareIndex] = KNIGHT; break;
+                        case 'b': blackBishops   |= bitMasks[squareIndex]; pieceAt[squareIndex] = BISHOP; break;
+                        case 'r': blackRooks     |= bitMasks[squareIndex]; pieceAt[squareIndex] = ROOK;   break;
+                        case 'q': blackQueens    |= bitMasks[squareIndex]; pieceAt[squareIndex] = QUEEN;  break;
+                        case 'k': blackKing      |= bitMasks[squareIndex]; pieceAt[squareIndex] = KING;   break;
                         default: cerr << "[WARNING]: Unknown piece character '" << piece << "'\n"; break;
                 }
                 file++;
@@ -367,125 +378,98 @@ public:
         int from = move.from;
         int to = move.to;
         bool isWhite = whiteToMove;
-        uint64_t fromBB = 1ULL << from;
-        uint64_t toBB = 1ULL << to;
+        uint64_t fromBB = bitMasks[from];
+        uint64_t toBB = bitMasks[to];
         enPassantSquare = 64;
         halfmoveClock++;
         Piece movedPiece = pieceAt[from];
-        pieceAt[from] = EMPTY;
+        Piece capturedPiece = pieceAt[to];
         pieceAt[to] = movedPiece;
 
-        auto move_piece = [&](uint64_t& bb, uint64_t from, uint64_t to) {
-            bb &= ~from;
-            bb |= to;
+        uint64_t* bitboards[2][6] = {
+            { &whitePawns, &whiteKnights, &whiteBishops, &whiteRooks, &whiteQueens, &whiteKing },
+            { &blackPawns, &blackKnights, &blackBishops, &blackRooks, &blackQueens, &blackKing }
         };
 
-        if (isWhite) {
-            blackPawns   &= ~toBB;
-            blackKnights &= ~toBB;
-            blackBishops &= ~toBB;
-            blackRooks   &= ~toBB;
-            blackQueens  &= ~toBB;
-            blackKing    &= ~toBB;
-            switch (movedPiece) {
-                case PAWN: {
-                    move_piece(whitePawns, fromBB, toBB);
-                    halfmoveClock = 0;
-                    if (move.isEnPassant) {
-                        blackPawns &= ~(1ULL << (to - 8));
-                        pieceAt[to - 8] = EMPTY;
-                    }
-                    if ((fromBB & rank2) && (toBB & rank4)) {
-                        enPassantSquare = (1 << 6) | (from + 8);
-                    }
-                    if (move.promotion) {
-                        whitePawns &= ~toBB;
-                        switch (move.promotion) {
-                            case 'q': whiteQueens |= toBB; pieceAt[to] = QUEEN; break;
-                            case 'r': whiteRooks |= toBB; pieceAt[to] = ROOK; break;
-                            case 'b': whiteBishops |= toBB; pieceAt[to] = BISHOP; break;
-                            case 'n': whiteKnights |= toBB; pieceAt[to] = KNIGHT; break;
-                        }
-                    }
-                    break;
-                }
-                case KNIGHT: move_piece(whiteKnights, fromBB, toBB); break;
-                case BISHOP: move_piece(whiteBishops, fromBB, toBB); break;
-                case ROOK: {
-                    move_piece(whiteRooks, fromBB, toBB);
-                    if (from == h1) castlingRights &= ~(1 << 3);
-                    else if (from == a1) castlingRights &= ~(1 << 2);
-                    break;
-                }
-                case QUEEN: move_piece(whiteQueens, fromBB, toBB); break;
-                case KING: {
-                    move_piece(whiteKing, fromBB, toBB);
-                    whiteKingPos = to;
-                    castlingRights &= ~(1 << 3 | 1 << 2);
+        Color mySide = isWhite ? WHITE : BLACK;
 
-                    if (from == e1 && to == g1) {
-                        move_piece(whiteRooks, 1ULL << h1, 1ULL << f1);
-                    } else if (from == e1 && to == c1) {
-                        move_piece(whiteRooks, 1ULL << a1, 1ULL << d1);
-                    }
-                    break;
+        if (movedPiece == PAWN) {
+            *bitboards[mySide][0] &= ~fromBB;
+            *bitboards[mySide][0] |= toBB;
+            halfmoveClock = 0;
+            if (move.isEnPassant) {
+                halfmoveClock = 0;
+                int capSq = isWhite ? to - 8 : to + 8;
+                *bitboards[!isWhite][0] &= ~bitMasks[capSq];
+                pieceAt[capSq] = EMPTY;
+            }
+            if ((fromBB & rank2) && (toBB & rank4)) {
+                enPassantSquare = (1 << 6) | (from + 8);
+            }
+            if (move.promotion != 0) {
+                *bitboards[mySide][0] &= ~toBB;
+                switch (move.promotion) {
+                    case 'q': *bitboards[mySide][QUEEN-1] |= toBB; pieceAt[to] = QUEEN; break;
+                    case 'r': *bitboards[mySide][ROOK-1]  |= toBB; pieceAt[to] = ROOK;  break;
+                    case 'b': *bitboards[mySide][BISHOP-1]|= toBB; pieceAt[to] = BISHOP;break;
+                    case 'n': *bitboards[mySide][KNIGHT-1]|= toBB; pieceAt[to] = KNIGHT;break;
                 }
             }
+        } else if (movedPiece == KING) {
+            *bitboards[mySide][5] &= ~fromBB;
+            *bitboards[mySide][5] |= toBB;
+            if (mySide == WHITE) whiteKingPos = to;
+            else blackKingPos = to;
+            if (mySide == WHITE) {
+                castlingRights &= ~((1 << 3) | (1 << 2));
+            } else {
+                castlingRights &= ~((1 << 1) | (1 << 0));
+            }
+            if (mySide == WHITE) {
+                if (from == e1 && to == g1) {
+                    whiteRooks &= ~bitMasks[h1];
+                    whiteRooks |= bitMasks[f1];
+                } else if (from == e1 && to == c1) {
+                    whiteRooks &= ~bitMasks[a1];
+                    whiteRooks |= bitMasks[d1];
+                }
+            } else {
+                if (from == e8 && to == g8) {
+                    blackRooks &= ~bitMasks[h8];
+                    blackRooks |= bitMasks[f8];
+                } else if (from == e8 && to == c8) {
+                    blackRooks &= ~bitMasks[a8];
+                    blackRooks |= bitMasks[d8];
+                }
+            }
+
         } else {
-            whitePawns   &= ~toBB;
-            whiteKnights &= ~toBB;
-            whiteBishops &= ~toBB;
-            whiteRooks   &= ~toBB;
-            whiteQueens  &= ~toBB;
-            whiteKing    &= ~toBB;
-            switch (movedPiece) {
-                case PAWN: {
-                    move_piece(blackPawns, fromBB, toBB);
-                    halfmoveClock = 0;
-                    if (move.isEnPassant) {
-                        whitePawns &= ~(1ULL << (to + 8));
-                        pieceAt[to + 8] = EMPTY;
-                    }
-                    if ((fromBB & rank7) && (toBB & rank5)) {
-                        enPassantSquare = (1 << 6) | (from - 8);
-                    }
-                    if (move.promotion) {
-                        blackPawns &= ~toBB;
-                        switch (move.promotion) {
-                            case 'q': blackQueens |= toBB; pieceAt[to] = QUEEN; break;
-                            case 'r': blackRooks |= toBB; pieceAt[to] = ROOK; break;
-                            case 'b': blackBishops |= toBB; pieceAt[to] = BISHOP; break;
-                            case 'n': blackKnights |= toBB; pieceAt[to] = KNIGHT; break;
-                        }
-                    }
-                    break;
-                }
-                case KNIGHT: move_piece(blackKnights, fromBB, toBB); break;
-                case BISHOP: move_piece(blackBishops, fromBB, toBB); break;
-                case ROOK: {
-                    move_piece(blackRooks, fromBB, toBB);
-                    if (from == h8) castlingRights &= ~(1 << 1);
-                    else if (from == a8) castlingRights &= ~(1 << 0);
-                    break;
-                }
-                case QUEEN: move_piece(blackQueens, fromBB, toBB); break;
-                case KING: {
-                    move_piece(blackKing, fromBB, toBB);
-                    blackKingPos = to;
-                    castlingRights &= ~(1 << 1 | 1 << 0);
-
-                    if (from == e8 && to == g8) {
-                        move_piece(blackRooks, 1ULL << h8, 1ULL << f8);
-                    } else if (from == e8 && to == c8) {
-                        move_piece(blackRooks, 1ULL << a8, 1ULL << d8);
-                    }
-                    break;
-                }
-            }
+            *bitboards[mySide][movedPiece-1] &= ~fromBB;
+            *bitboards[mySide][movedPiece-1] |= toBB;
         }
 
-        bool isCapture = (whitePieces | blackPieces) & toBB;
-        if (isCapture) halfmoveClock = 0;
+        switch (from) {
+            case a1: castlingRights &= ~(0b100); break;
+            case h1: castlingRights &= ~(0b1000); break;
+            case a8: castlingRights &= ~(0b1); break;
+            case h8: castlingRights &= ~(0b10); break;
+            default: break;
+        }
+
+        switch (to) {
+            case a1: castlingRights &= ~(0b100); break;
+            case h1: castlingRights &= ~(0b1000); break;
+            case a8: castlingRights &= ~(0b1); break;
+            case h8: castlingRights &= ~(0b10); break;
+            default: break;
+        }
+
+        if (capturedPiece != EMPTY) {
+            *bitboards[1-mySide][capturedPiece-1] &= ~toBB;
+            halfmoveClock = 0;
+        }
+
+        pieceAt[from] = EMPTY;
 
         whiteToMove = !whiteToMove;
         if (!whiteToMove) fullmoveNumber++;
@@ -497,8 +481,8 @@ public:
 
 
     bool is_king_in_check(bool white) {
-        return white ? (blackAttacks & (1ULL << whiteKingPos)) != 0
-                    : (whiteAttacks & (1ULL << blackKingPos)) != 0;
+        return white ? (blackAttacks & bitMasks[whiteKingPos]) != 0
+                    : (whiteAttacks & bitMasks[blackKingPos]) != 0;
     }
 
 
@@ -523,19 +507,19 @@ public:
 
 };
 
-void GenerateCastlingMoves(uint64_t king, uint64_t rooks, uint8_t castlingRights, uint64_t all, vector<Move>& moves, Color color) {
+void GenerateCastlingMoves(uint64_t king, uint64_t rooks, uint8_t castlingRights, uint64_t all, vector<Move>& moves, Color color, uint64_t whiteAttacks, uint64_t blackAttacks) {
     if (color == WHITE) {
-        if (((castlingRights & 0b1000) != 0) && ((all & castlingBB[0]) == 0)) {
+        if (((castlingRights & 0b1000) != 0) && ((all & castlingBB[0]) == 0) && ((blackAttacks & bitMasks[f1]) != 0)) {
             moves.push_back(Move(e1, g1));
         }
-        if (((castlingRights & 0b0100) != 0) && ((all & castlingBB[1]) == 0)) {
+        if (((castlingRights & 0b0100) != 0) && ((all & castlingBB[1]) == 0) && ((blackAttacks & bitMasks[d1]) != 0) && ((blackAttacks & bitMasks[c1]) != 0)) {
             moves.push_back(Move(e1, c1));
         }
     } else {
-        if (((castlingRights & 0b0010) != 0) && ((all & castlingBB[2]) == 0)) {
+        if (((castlingRights & 0b0010) != 0) && ((all & castlingBB[2]) == 0) && ((whiteAttacks & bitMasks[f8]) != 0)) {
             moves.push_back(Move(e8, g8));
         }
-        if (((castlingRights & 0b0001) != 0) && ((all & castlingBB[3]) == 0)) {
+        if (((castlingRights & 0b0001) != 0) && ((all & castlingBB[3]) == 0) && ((whiteAttacks & bitMasks[d8]) != 0) && ((whiteAttacks & bitMasks[c8]) != 0)) {
             moves.push_back(Move(e8, c8));
         }
     }
@@ -554,7 +538,7 @@ void GenerateSlidingMoves(uint64_t pieces, const int directions[][2], int dirCou
             int f = file + directions[d][1];
             while (r >= 0 && r < 8 && f >= 0 && f < 8) {
                 int target = r * 8 + f;
-                uint64_t targetBB = 1ULL << target;
+                uint64_t targetBB = bitMasks[target];
                 if (own & targetBB) break;
                 moves.push_back(Move(sq, target));
                 if (enemy & targetBB) break;
@@ -594,7 +578,7 @@ void GeneratePawnMoves(uint64_t pawns, uint64_t enemy, uint64_t all, vector<Move
         int rank = sq >> 3;
 
         int oneStep = sq + forward;
-        if (oneStep >= 0 && oneStep < 64 && !(all & (1ULL << oneStep))) {
+        if (oneStep >= 0 && oneStep < 64 && !(all & bitMasks[oneStep])) {
             if (rank == promotionRank) {
                 moves.push_back(Move(sq, oneStep, 'q'));
                 moves.push_back(Move(sq, oneStep, 'r'));
@@ -605,7 +589,7 @@ void GeneratePawnMoves(uint64_t pawns, uint64_t enemy, uint64_t all, vector<Move
 
                 if (rank == startRank) {
                     int twoStep = sq + 2 * forward;
-                    if (!(all & (1ULL << twoStep))) {
+                    if (!(all & bitMasks[twoStep])) {
                         moves.push_back(Move(sq, twoStep));
                     }
                 }
@@ -630,7 +614,7 @@ void GeneratePawnMoves(uint64_t pawns, uint64_t enemy, uint64_t all, vector<Move
         }
 
         if (epSquare < 64) {
-            uint64_t epBB = 1ULL << epSquare;
+            uint64_t epBB = bitMasks[epSquare];
             if ((attacks & epBB) != 0) {
                 moves.push_back(Move(sq, epSquare, 0, true));
             }
@@ -650,7 +634,7 @@ vector<Move> GeneratePseudoLegalMoves(Board& board, bool isWhiteToMove) {
         GenerateNonSlidingMoves(board.whiteKnights, knightAttacks, board.whitePieces, moves);
         GenerateNonSlidingMoves(board.whiteKing, kingAttacks, board.whitePieces, moves);
         GeneratePawnMoves(board.whitePawns, board.blackPieces, board.allPieces, moves, WHITE, epTarget);
-        GenerateCastlingMoves(board.whiteKing, board.whiteRooks, board.castlingRights, board.allPieces, moves, WHITE);
+        if (!board.is_king_in_check(true)) GenerateCastlingMoves(board.whiteKing, board.whiteRooks, board.castlingRights, board.allPieces, moves, WHITE, board.whiteAttacks, board.blackAttacks);
     } else {
         GenerateSlidingMoves(board.blackBishops, bishopDirs, std::size(bishopDirs), board.blackPieces, board.whitePieces, moves);
         GenerateSlidingMoves(board.blackRooks,   rookDirs,   std::size(rookDirs),   board.blackPieces, board.whitePieces, moves);
@@ -658,7 +642,7 @@ vector<Move> GeneratePseudoLegalMoves(Board& board, bool isWhiteToMove) {
         GenerateNonSlidingMoves(board.blackKnights, knightAttacks, board.blackPieces, moves);
         GenerateNonSlidingMoves(board.blackKing, kingAttacks, board.blackPieces, moves);
         GeneratePawnMoves(board.blackPawns, board.whitePieces, board.allPieces, moves, BLACK, epTarget);
-        GenerateCastlingMoves(board.blackKing, board.blackRooks, board.castlingRights, board.allPieces, moves, BLACK);
+        if (!board.is_king_in_check(false)) GenerateCastlingMoves(board.blackKing, board.blackRooks, board.castlingRights, board.allPieces, moves, BLACK, board.whiteAttacks, board.blackAttacks);
     }
 
     return moves;
@@ -671,7 +655,11 @@ vector<Move> GenerateLegalMoves(Board& board) {
 
     for (const Move& move : pseudoMoves) {
         Board temp = board;
-        cout << "[TIME] ---- " << indexToSquare(move.from) << indexToSquare(move.to) << (move.promotion == 0 ? "" : ("" + move.promotion))  << " ----" << endl;
+        cout << "[TIME] ---- " << indexToSquare(move.from) << indexToSquare(move.to);
+        if (move.promotion != 0) {
+            cout << (char)move.promotion;
+        }
+        cout << " ----" << endl;
         cout << "[TIME] White pieces: " << temp.whitePieces << endl;
         cout << "[TIME] Black pieces: " << temp.blackPieces << endl;
         cout << "[TIME] White attacks: " << temp.whiteAttacks << endl;
@@ -734,7 +722,7 @@ int main() {
 
             auto end_time = chrono::high_resolution_clock::now();
             auto duration = chrono::duration_cast<chrono::nanoseconds>(end_time-start_time);
-            //logFile << "[LOG] Bitboards Generated in " << duration.count() << " ns" << "\n" << flush;
+            cout << "[TIME] Bitboards Generated in " << duration.count() << " ns" << "\n" << flush;
             cout << "initialok" << endl << flush;
         } else if (line.rfind("move", 0) == 0) {
             if (line == "move start") continue;
@@ -746,7 +734,7 @@ int main() {
             bool isEnPassant = false;
             if (board.hasEnPassant()) {
                 uint64_t pawns = board.whiteToMove ? board.whitePawns : board.blackPawns;
-                isEnPassant = (to == board.getEnPassantTarget()) && ((pawns & (1ULL << from) != 0));
+                isEnPassant = (to == board.getEnPassantTarget()) && ((pawns & bitMasks[from] != 0));
             }
             
             char promotion = 0;
@@ -757,19 +745,19 @@ int main() {
             board.make_move(Move(from, to, promotion, isEnPassant));
             auto end_time = chrono::high_resolution_clock::now();
             auto duration = chrono::duration_cast<chrono::nanoseconds>(end_time-start_time);
-            //logFile << "[LOG] Moves Updated in " << duration.count() << " ns\n" << flush;
+            cout << "[TIME] Moves Updated in " << duration.count() << " ns\n" << flush;
         } else if (line.rfind("go", 0) == 0) {
             vector<Move> legalMoves = GenerateLegalMoves(board);
             std::default_random_engine engine(std::chrono::system_clock::now().time_since_epoch().count());
             std::uniform_int_distribution<int> dist(0, legalMoves.size() - 1);
             int randomIndex = dist(engine);
             Move bestMove = legalMoves[randomIndex];
-            string promotion = bestMove.promotion == ' ' ? "" : string(1, bestMove.promotion);
-            string bestUCI = indexToSquare(bestMove.from) + indexToSquare(bestMove.to) + promotion;
-            //logFile << "[LOG] Board State before " << bestUCI << ": "<< board.allPieces << "\n" << flush;
+            cout << "bestmove " << indexToSquare(bestMove.from) << indexToSquare(bestMove.to);
+            if (bestMove.promotion != 0) {
+                cout << (char)bestMove.promotion;
+            }
             board.make_move(bestMove);
-            //logFile << "[LOG] Board State after " << bestUCI << ": "<< board.allPieces << "\n" << flush;
-            cout << "bestmove " << bestUCI << endl << flush;
+            cout << endl << flush;
         } else if (line == "quit") {
             break;
         }

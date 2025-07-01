@@ -214,7 +214,7 @@ class Program
         string? line;
         while ((line = await engine.StandardOutput.ReadLineAsync()) != null)
         {
-            if (line.StartsWith("[TIME]")) Console.WriteLine(line);
+            if (line.StartsWith("[TIME]") || line.StartsWith("[LOG]")) Console.WriteLine(line);
             if (line.StartsWith("bestmove"))
             {
                 return line.Split(' ')[1];
