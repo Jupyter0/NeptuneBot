@@ -60,3 +60,10 @@ Thumbs.db
 .env
 .env.botA
 .env.botB
+
+# =============== Stockfish ===============
+/stockfish/
+/stockfish_bin/
+*.exe
+*.o
+*.out

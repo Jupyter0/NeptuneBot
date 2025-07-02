@@ -749,6 +749,19 @@ int main() {
             auto end_time = chrono::high_resolution_clock::now();
             auto duration = chrono::duration_cast<chrono::nanoseconds>(end_time-start_time);
             cout << "[TIME] Moves Updated in " << duration.count() << " ns\n" << flush;
+        } else if (line.rfind("legal", 0) == 0) {
+            vector<Move> legalMoves = GenerateLegalMoves(board);
+            cout << "Legal Moves: ";
+
+            for (int i = 0; i < legalMoves.size(); i++) {
+                cout << indexToSquare(legalMoves[i].from) << indexToSquare(legalMoves[i].from);
+                if (legalMoves[i].promotion != 0) {
+                    cout << (char)legalMoves[i].promotion;
+                }
+                cout << " ";
+            }
+
+            cout << flush;
         } else if (line.rfind("go", 0) == 0) {
             auto start_time = chrono::high_resolution_clock::now();
             vector<Move> legalMoves = GenerateLegalMoves(board);

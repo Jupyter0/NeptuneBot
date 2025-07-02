@@ -4747,11 +4747,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/home/jupyter/NeptuneBot/NeptuneBot.csproj",
+      "projectUniqueName": "/home/jupyter/NeptuneBotOld/NeptuneBot.csproj",
       "projectName": "NeptuneBot",
-      "projectPath": "/home/jupyter/NeptuneBot/NeptuneBot.csproj",
+      "projectPath": "/home/jupyter/NeptuneBotOld/NeptuneBot.csproj",
       "packagesPath": "/home/jupyter/.nuget/packages/",
-      "outputPath": "/home/jupyter/NeptuneBot/obj/",
+      "outputPath": "/home/jupyter/NeptuneBotOld/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/home/jupyter/.nuget/NuGet/NuGet.Config"
