@@ -102,6 +102,7 @@ class Program
                 FileName = "./engine/bin/Neptune",
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             },
@@ -109,6 +110,15 @@ class Program
         };
 
         engine.Start();
+
+        _ = Task.Run(async () =>
+        {
+            string? errorLine;
+            while ((errorLine = await engine.StandardError.ReadLineAsync()) != null)
+            {
+                Console.WriteLine("[ENGINE-ERR] " + errorLine);
+            }
+        });
 
         while (!reader.EndOfStream)
         {

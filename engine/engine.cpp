@@ -60,6 +60,18 @@ constexpr std::array<std::array<uint64_t, 64>, 2> pawnAttacks = {{
         0x0028000000000000ULL, 0x0050000000000000ULL, 0x00A0000000000000ULL, 0x0040000000000000ULL
     }
 }};
+
+constexpr uint8_t castlingClearTable[64] = {
+    0b0100, 0, 0, 0, 0, 0, 0, 0b1000,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0b0001, 0, 0, 0, 0, 0, 0, 0b0010
+};
+
 constexpr uint64_t knightAttacks[64] = {
     0x0000000000020400ULL, 0x0000000000050800ULL, 0x00000000000a1100ULL, 0x0000000000142200ULL,
     0x0000000000284400ULL, 0x0000000000508800ULL, 0x0000000000a01000ULL, 0x0000000000402000ULL,
@@ -153,6 +165,16 @@ struct Move {
 
     Move(int From, int To, char Promotion = 0, bool EP = false) : from(From), to(To), promotion(Promotion), isEnPassant(EP) {}
 };
+
+constexpr array<Piece, 128> promotionCharToPiece = [] {
+    array<Piece, 128> table{};
+    table['q'] = QUEEN;
+    table['r'] = ROOK;
+    table['b'] = BISHOP;
+    table['n'] = KNIGHT;
+    return table;
+}();
+
 string indexToSquare(int index) {
     int file = index & 7;  // 0 to 7
     int rank = index >> 3;  // 0 to 7
@@ -166,13 +188,13 @@ string indexToSquare(int index) {
 Piece charToPiece(char pieceChar) {
     pieceChar = tolower(pieceChar);
     switch (pieceChar) {
-        case 'p': return PAWN; break;
-        case 'n': return KNIGHT; break;
-        case 'b': return BISHOP; break;
-        case 'r': return ROOK; break;
-        case 'q': return QUEEN; break;
-        case 'k': return KING; break;
-        default: return EMPTY; break;
+        case 'p': return PAWN;
+        case 'n': return KNIGHT;
+        case 'b': return BISHOP;
+        case 'r': return ROOK;
+        case 'q': return QUEEN;
+        case 'k': return KING;
+        default: return EMPTY;
     }
 }
 
@@ -380,7 +402,7 @@ public:
         bool isWhite = whiteToMove;
         uint64_t fromBB = bitMasks[from];
         uint64_t toBB = bitMasks[to];
-        enPassantSquare = 64;
+        enPassantSquare = 0;
         halfmoveClock++;
         Piece movedPiece = pieceAt[from];
         Piece capturedPiece = pieceAt[to];
@@ -398,7 +420,6 @@ public:
             *bitboards[mySide][0] |= toBB;
             halfmoveClock = 0;
             if (move.isEnPassant) {
-                halfmoveClock = 0;
                 int capSq = isWhite ? to - 8 : to + 8;
                 *bitboards[!isWhite][0] &= ~bitMasks[capSq];
                 pieceAt[capSq] = EMPTY;
@@ -408,38 +429,34 @@ public:
             }
             if (move.promotion != 0) {
                 *bitboards[mySide][0] &= ~toBB;
-                switch (move.promotion) {
-                    case 'q': *bitboards[mySide][QUEEN-1] |= toBB; pieceAt[to] = QUEEN; break;
-                    case 'r': *bitboards[mySide][ROOK-1]  |= toBB; pieceAt[to] = ROOK;  break;
-                    case 'b': *bitboards[mySide][BISHOP-1]|= toBB; pieceAt[to] = BISHOP;break;
-                    case 'n': *bitboards[mySide][KNIGHT-1]|= toBB; pieceAt[to] = KNIGHT;break;
-                }
+                Piece promoted = charToPiece(move.promotion);
+                *bitboards[mySide][promoted-1] |= toBB;
+                pieceAt[to] = promoted;
             }
         } else if (movedPiece == KING) {
             *bitboards[mySide][5] &= ~fromBB;
             *bitboards[mySide][5] |= toBB;
             if (mySide == WHITE) whiteKingPos = to;
             else blackKingPos = to;
-            if (mySide == WHITE) {
-                castlingRights &= ~((1 << 3) | (1 << 2));
-            } else {
-                castlingRights &= ~((1 << 1) | (1 << 0));
-            }
-            if (mySide == WHITE) {
-                if (from == e1 && to == g1) {
-                    whiteRooks &= ~bitMasks[h1];
-                    whiteRooks |= bitMasks[f1];
-                } else if (from == e1 && to == c1) {
-                    whiteRooks &= ~bitMasks[a1];
-                    whiteRooks |= bitMasks[d1];
-                }
-            } else {
-                if (from == e8 && to == g8) {
-                    blackRooks &= ~bitMasks[h8];
-                    blackRooks |= bitMasks[f8];
-                } else if (from == e8 && to == c8) {
-                    blackRooks &= ~bitMasks[a8];
-                    blackRooks |= bitMasks[d8];
+
+            if (from == e1 || from == e8) {
+                castlingRights &= ~(3 << (2*(1-mySide)));
+                if (to == g1) {
+                    whiteRooks = (whiteRooks & ~bitMasks[h1]) | bitMasks[f1];
+                    pieceAt[h1] = EMPTY;
+                    pieceAt[f1] = ROOK;
+                } else if (to == c1) {
+                    whiteRooks = (whiteRooks & ~bitMasks[a1]) | bitMasks[d1];
+                    pieceAt[a1] = EMPTY;
+                    pieceAt[d1] = ROOK;
+                } else if (to == g8) {
+                    blackRooks = (blackRooks & ~bitMasks[h8]) | bitMasks[f8];
+                    pieceAt[h8] = EMPTY;
+                    pieceAt[f8] = ROOK;
+                } else if (to == c8) {
+                    blackRooks = (blackRooks & ~bitMasks[a8]) | bitMasks[d8];
+                    pieceAt[a8] = EMPTY;
+                    pieceAt[d8] = ROOK;
                 }
             }
 
@@ -448,21 +465,7 @@ public:
             *bitboards[mySide][movedPiece-1] |= toBB;
         }
 
-        switch (from) {
-            case a1: castlingRights &= ~(0b100); break;
-            case h1: castlingRights &= ~(0b1000); break;
-            case a8: castlingRights &= ~(0b1); break;
-            case h8: castlingRights &= ~(0b10); break;
-            default: break;
-        }
-
-        switch (to) {
-            case a1: castlingRights &= ~(0b100); break;
-            case h1: castlingRights &= ~(0b1000); break;
-            case a8: castlingRights &= ~(0b1); break;
-            case h8: castlingRights &= ~(0b10); break;
-            default: break;
-        }
+        castlingRights &= ~(castlingClearTable[from] | castlingClearTable[to]);
 
         if (capturedPiece != EMPTY) {
             *bitboards[1-mySide][capturedPiece-1] &= ~toBB;
@@ -509,17 +512,17 @@ public:
 
 void GenerateCastlingMoves(uint64_t king, uint64_t rooks, uint8_t castlingRights, uint64_t all, vector<Move>& moves, Color color, uint64_t whiteAttacks, uint64_t blackAttacks) {
     if (color == WHITE) {
-        if (((castlingRights & 0b1000) != 0) && ((all & castlingBB[0]) == 0) && ((blackAttacks & bitMasks[f1]) != 0)) {
+        if (((castlingRights & 0b1000) != 0) && ((all & castlingBB[0]) == 0) && ((blackAttacks & bitMasks[f1]) == 0)) {
             moves.push_back(Move(e1, g1));
         }
-        if (((castlingRights & 0b0100) != 0) && ((all & castlingBB[1]) == 0) && ((blackAttacks & bitMasks[d1]) != 0) && ((blackAttacks & bitMasks[c1]) != 0)) {
+        if (((castlingRights & 0b0100) != 0) && ((all & castlingBB[1]) == 0) && ((blackAttacks & bitMasks[d1]) == 0) && ((blackAttacks & bitMasks[c1]) == 0)) {
             moves.push_back(Move(e1, c1));
         }
     } else {
-        if (((castlingRights & 0b0010) != 0) && ((all & castlingBB[2]) == 0) && ((whiteAttacks & bitMasks[f8]) != 0)) {
+        if (((castlingRights & 0b0010) != 0) && ((all & castlingBB[2]) == 0) && ((whiteAttacks & bitMasks[f8]) == 0)) {
             moves.push_back(Move(e8, g8));
         }
-        if (((castlingRights & 0b0001) != 0) && ((all & castlingBB[3]) == 0) && ((whiteAttacks & bitMasks[d8]) != 0) && ((whiteAttacks & bitMasks[c8]) != 0)) {
+        if (((castlingRights & 0b0001) != 0) && ((all & castlingBB[3]) == 0) && ((whiteAttacks & bitMasks[d8]) == 0) && ((whiteAttacks & bitMasks[c8]) == 0)) {
             moves.push_back(Move(e8, c8));
         }
     }
@@ -655,32 +658,32 @@ vector<Move> GenerateLegalMoves(Board& board) {
 
     for (const Move& move : pseudoMoves) {
         Board temp = board;
-        cout << "[TIME] ---- " << indexToSquare(move.from) << indexToSquare(move.to);
+        //cout << "[TIME] ---- " << indexToSquare(move.from) << indexToSquare(move.to);
         if (move.promotion != 0) {
-            cout << (char)move.promotion;
+            //cout << (char)move.promotion;
         }
-        cout << " ----" << endl;
-        cout << "[TIME] White pieces: " << temp.whitePieces << endl;
-        cout << "[TIME] Black pieces: " << temp.blackPieces << endl;
-        cout << "[TIME] White attacks: " << temp.whiteAttacks << endl;
-        cout << "[TIME] Black attacks: " << temp.blackAttacks << endl;
-        cout << "[TIME] White King pos: " << to_string(temp.whiteKingPos) << ", " << temp.whiteKing << endl;
-        cout << "[TIME] Black King pos: " << to_string(temp.blackKingPos) << ", " << temp.blackKing << endl;
-        cout << endl;
-        cout << "[TIME] White pawns: " << temp.whitePawns << endl;
-        cout << "[TIME] Black pawns: " << temp.blackPawns << endl;
-        cout << "[TIME] White bishops: " << temp.whiteBishops << endl;
-        cout << "[TIME] Black bishops: " << temp.blackBishops << endl;
-        cout << "[TIME] White knights: " << temp.whiteKnights << endl;
-        cout << "[TIME] Black knights: " << temp.blackKnights << endl;
-        cout << "[TIME] White rooks: " << temp.whiteRooks << endl;
-        cout << "[TIME] Black rooks: " << temp.blackRooks << endl;
-        cout << "[TIME] White queens: " << temp.whiteQueens << endl;
-        cout << "[TIME] Black queens: " << temp.blackQueens << endl;
-        cout << endl;
-        cout << "[TIME] All pieces: " << temp.allPieces << endl;
-        cout << endl;
-        cout << flush;
+        //cout << " ----" << endl;
+        //cout << "[TIME] White pieces: " << temp.whitePieces << endl;
+        //cout << "[TIME] Black pieces: " << temp.blackPieces << endl;
+        //cout << "[TIME] White attacks: " << temp.whiteAttacks << endl;
+        //cout << "[TIME] Black attacks: " << temp.blackAttacks << endl;
+        //cout << "[TIME] White King pos: " << to_string(temp.whiteKingPos) << ", " << temp.whiteKing << endl;
+        //cout << "[TIME] Black King pos: " << to_string(temp.blackKingPos) << ", " << temp.blackKing << endl;
+        //cout << endl;
+        //cout << "[TIME] White pawns: " << temp.whitePawns << endl;
+        //cout << "[TIME] Black pawns: " << temp.blackPawns << endl;
+        //cout << "[TIME] White bishops: " << temp.whiteBishops << endl;
+        //cout << "[TIME] Black bishops: " << temp.blackBishops << endl;
+        //cout << "[TIME] White knights: " << temp.whiteKnights << endl;
+        //cout << "[TIME] Black knights: " << temp.blackKnights << endl;
+        //cout << "[TIME] White rooks: " << temp.whiteRooks << endl;
+        //cout << "[TIME] Black rooks: " << temp.blackRooks << endl;
+        //cout << "[TIME] White queens: " << temp.whiteQueens << endl;
+        //cout << "[TIME] Black queens: " << temp.blackQueens << endl;
+        //cout << endl;
+        //cout << "[TIME] All pieces: " << temp.allPieces << endl;
+        //cout << endl;
+        //cout << flush;
         temp.make_move(move);
         if (!temp.is_king_in_check(!temp.whiteToMove)) { // check if own king is not in check
             legalMoves.push_back(move);
@@ -747,8 +750,12 @@ int main() {
             auto duration = chrono::duration_cast<chrono::nanoseconds>(end_time-start_time);
             cout << "[TIME] Moves Updated in " << duration.count() << " ns\n" << flush;
         } else if (line.rfind("go", 0) == 0) {
+            auto start_time = chrono::high_resolution_clock::now();
             vector<Move> legalMoves = GenerateLegalMoves(board);
             std::default_random_engine engine(std::chrono::system_clock::now().time_since_epoch().count());
+            auto end_time = chrono::high_resolution_clock::now();
+            auto duration = chrono::duration_cast<chrono::nanoseconds>(end_time-start_time);
+            cout << "[TIME] " << legalMoves.size() << " Moves Generated in " << duration.count() << " ns\n" << flush;
             std::uniform_int_distribution<int> dist(0, legalMoves.size() - 1);
             int randomIndex = dist(engine);
             Move bestMove = legalMoves[randomIndex];
